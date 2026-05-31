@@ -386,10 +386,10 @@ User              Vue 3              FastAPI           SQLite
 
 ### TDD Approach
 
-Every backend feature follows the red-green cycle: **write the test first → watch it fail → implement → pass**. This keeps the scope narrow and ensures all code is covered from day one.
+Every backend feature follows the red-green cycle: **write the test first → watch it fail → implement → pass**. This keeps scope narrow and ensures all code is covered from day one.
 
 ```
-for each feature:
+for each BE feature:
   1. write failing test(s) in tests/unit/ or tests/integration/
   2. implement the minimal code to pass
   3. refactor — tests stay green
@@ -397,90 +397,119 @@ for each feature:
 
 Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncClient` (test client against the real FastAPI app with an in-memory SQLite DB).
 
+**Build order: Backend → Validate → Frontend.** The backend is the core of the system. It is built and validated in full (via automated tests + Swagger UI) before any frontend code is written. This avoids building UI against a moving API.
+
 ---
 
-### Phase 1 — Skeleton (Week 1)
-- [ ] `uv add pytest pytest-asyncio httpx` — configure `conftest.py` with test DB fixture
+### ── BACKEND ──────────────────────────────────────────
+
+### Phase 1 — BE Skeleton (Week 1)
+- [ ] `uv init backend` — add `pytest pytest-asyncio httpx` dev deps; wire `conftest.py`
 - [ ] **[TDD]** Test: `POST /api/documents/upload` returns 201 with `doc_id`
-- [ ] FastAPI scaffold: routers, SQLModel models, DB init
-- [ ] PDF upload endpoint + PyMuPDF text extraction
+- [ ] FastAPI scaffold: `main.py`, routers, SQLModel models, DB init
+- [ ] PDF upload endpoint + PyMuPDF text extraction + ChromaDB upsert
 - [ ] **[TDD]** Test: library CRUD (create, list, add doc, remove doc)
 - [ ] Library + Library–Document endpoints
-- [ ] ChromaDB setup: collection-per-document, upsert pipeline
-- [ ] Vue 3 project: Vite + Pinia + Vue Router; basic layout
 
-### Phase 2 — Core RAG + Chat (Week 2)
+### Phase 2 — Core RAG + Chat BE (Week 2)
 - [ ] **[TDD]** Test: `RAGConfig` defaults and JSON round-trip
 - [ ] Plugin interfaces + `RecursiveChunker`, `LocalEmbedder`, `DenseRetriever`, `NoopReranker`
 - [ ] **[TDD]** Test: LangGraph pipeline returns non-empty answer for a seeded doc
 - [ ] LangGraph RAG pipeline wired to plugin registry + `RAGConfig`
 - [ ] **[TDD]** Test: WebSocket sends `token` frames then `done` frame
 - [ ] WebSocket endpoint + streaming token handler
-- [ ] Vue chat window: WebSocket client, token append, message bubbles
-- [ ] Session create / list / load + sidebar
 - [ ] **[TDD]** Test: session reload reconstructs full message history
+- [ ] Session CRUD + message persistence
 
-### Phase 3 — Multi-LLM + Libraries (Week 3)
+### Phase 3 — Multi-LLM + RAG Variants (Week 3)
 - [ ] **[TDD]** Test: `LLMGateway.get_llm` returns correct adapter per provider
-- [ ] LangChain adapters for Gemini + Claude; model selector in session modal
+- [ ] LangChain adapters for Gemini + Claude
 - [ ] **[TDD]** Test: two sessions on same library get independent histories
-- [ ] Library selector on session create; cross-collection Chroma search
+- [ ] Cross-collection Chroma search; source citations in response
 - [ ] **[TDD]** Test: `RAGConfig` on library overrides chunker/retriever at runtime
-- [ ] Source citations in assistant messages
-
-### Phase 4 — Polish (Week 4)
 - [ ] **[TDD]** Test: delete document cascades vectors + library memberships
-- [ ] Document delete, session rename/delete, library rename
-- [ ] Upload progress via `BackgroundTasks` + status polling endpoint
-- [ ] Error states: failed indexing, LLM timeout
+- [ ] Document delete, session delete, library delete/rename
+
+### Phase 4 — BE Validation Gate (Week 4)
+> All tests green. Manually exercise every endpoint in Swagger UI at `/docs` before writing any frontend code.
+
+- [ ] `uv run pytest --cov=services` — coverage ≥ 80%
+- [ ] Smoke-test full happy path via Swagger: upload PDF → create library → add doc → create session → chat
+- [ ] Smoke-test WebSocket via a minimal HTML test page or `wscat`
+- [ ] Fix any gaps found; no new features — only hardening
+- [ ] Upload progress via `BackgroundTasks` + polling endpoint
+- [ ] Document all edge cases found during validation in section 9
+
+---
+
+### ── FRONTEND ─────────────────────────────────────────
+
+### Phase 5 — FE Skeleton + Document/Library UI (Week 5)
+- [ ] `npm create vue@latest frontend` — Vite + Pinia + Vue Router
+- [ ] `documents` store + `PDFUploader.vue` — upload, list, delete
+- [ ] `libraries` store + library list/create/rename/delete views
+- [ ] `LibraryPicker.vue` — add/remove docs from a library
+
+### Phase 6 — Chat UI (Week 6)
+- [ ] `useChatSocket.ts` composable — connect, send, stream tokens, handle `done`/`error`
+- [ ] `ChatWindow.vue` + `MessageBubble.vue` — token append, source citations
+- [ ] `SessionSidebar.vue` — list, load, rename, delete sessions
+- [ ] Session create modal: choose library + provider + model
+
+### Phase 7 — Integration Polish (Week 7)
+- [ ] End-to-end test: upload → library → session → chat → reload
+- [ ] Error states: failed indexing, LLM timeout, WS disconnect
+- [ ] Upload progress indicator wired to polling endpoint
 - [ ] Basic responsive layout
 
 ---
 
 ## 7. Directory Structure
 
+The project is split into two top-level directories. **`backend/`** is the primary focus — built and validated first. **`frontend/`** is added after the API is stable.
+
 ```
 chatpdf/
-├── backend/
-│   ├── pyproject.toml           # uv project manifest + dependencies
-│   ├── uv.lock                  # locked dependency tree (commit this)
-│   ├── .env                     # API keys — never commit
-│   ├── .env.example             # template with key names, no values
-│   ├── main.py                  # FastAPI app, Swagger config, WS registration
+│
+├── backend/                         ◄── primary focus; built & validated first
+│   ├── pyproject.toml               # uv project manifest + dependencies
+│   ├── uv.lock                      # locked dependency tree (commit this)
+│   ├── .env                         # API keys — never commit
+│   ├── .env.example                 # template with key names, no values
+│   ├── main.py                      # FastAPI app, Swagger config, WS registration
 │   ├── routers/
 │   │   ├── documents.py
-│   │   ├── libraries.py         # Library CRUD + document membership
+│   │   ├── libraries.py             # Library CRUD + document membership
 │   │   ├── sessions.py
 │   │   └── chat_ws.py
 │   ├── services/
-│   │   ├── ingestion.py         # PDF → chunks → ChromaDB (uses RAGConfig)
-│   │   ├── rag.py               # LangGraph pipeline (calls plugin interfaces)
-│   │   ├── rag_config.py        # RAGConfig dataclass + plugin registries
+│   │   ├── ingestion.py             # PDF → chunks → ChromaDB (uses RAGConfig)
+│   │   ├── rag.py                   # LangGraph pipeline (calls plugin interfaces)
+│   │   ├── rag_config.py            # RAGConfig dataclass + plugin registries
 │   │   ├── plugins/
-│   │   │   ├── base.py          # abstract base classes
-│   │   │   ├── chunkers.py      # RecursiveChunker, SentenceChunker, ...
-│   │   │   ├── embedders.py     # LocalEmbedder, OpenAIEmbedder
-│   │   │   ├── retrievers.py    # DenseRetriever, HybridRetriever
-│   │   │   └── rerankers.py     # NoopReranker, CrossEncoderReranker
-│   │   ├── llm_gateway.py       # multi-LLM abstraction
-│   │   └── chat_history.py      # SQLite read/write
-│   ├── models/                  # SQLModel table definitions
-│   ├── db.py                    # SQLite engine + session
-│   └── vector_store.py          # ChromaDB client wrapper
+│   │   │   ├── base.py              # abstract base classes
+│   │   │   ├── chunkers.py          # RecursiveChunker, SentenceChunker, ...
+│   │   │   ├── embedders.py         # LocalEmbedder, OpenAIEmbedder
+│   │   │   ├── retrievers.py        # DenseRetriever, HybridRetriever
+│   │   │   └── rerankers.py         # NoopReranker, CrossEncoderReranker
+│   │   ├── llm_gateway.py           # multi-LLM abstraction
+│   │   └── chat_history.py          # SQLite read/write
+│   ├── models/                      # SQLModel table definitions
+│   ├── db.py                        # SQLite engine + session
+│   ├── vector_store.py              # ChromaDB client wrapper
+│   └── tests/                       # co-located with backend code
+│       ├── conftest.py              # fixtures: in-memory SQLite, AsyncClient, seeded docs
+│       ├── unit/
+│       │   ├── test_rag_config.py   # RAGConfig defaults, JSON round-trip
+│       │   ├── test_plugins.py      # each chunker/embedder/retriever/reranker
+│       │   └── test_ingestion.py    # chunk + embed pipeline
+│       └── integration/
+│           ├── test_documents_api.py
+│           ├── test_libraries_api.py
+│           ├── test_sessions_api.py
+│           └── test_chat_ws.py      # WS token stream + done frame
 │
-├── tests/
-│   ├── conftest.py              # fixtures: in-memory SQLite, AsyncClient, seeded docs
-│   ├── unit/
-│   │   ├── test_rag_config.py   # RAGConfig defaults, JSON round-trip
-│   │   ├── test_plugins.py      # each chunker/embedder/retriever/reranker
-│   │   └── test_ingestion.py    # chunk + embed pipeline
-│   └── integration/
-│       ├── test_documents_api.py
-│       ├── test_libraries_api.py
-│       ├── test_sessions_api.py
-│       └── test_chat_ws.py      # WS token stream + done frame
-│
-├── frontend/
+├── frontend/                        ◄── added after BE is validated
 │   ├── src/
 │   │   ├── views/
 │   │   │   ├── ChatView.vue
@@ -489,19 +518,19 @@ chatpdf/
 │   │   │   ├── ChatWindow.vue
 │   │   │   ├── MessageBubble.vue
 │   │   │   ├── SessionSidebar.vue
-│   │   │   ├── LibraryPicker.vue  # choose/create library when starting session
+│   │   │   ├── LibraryPicker.vue    # choose/create library when starting session
 │   │   │   └── PDFUploader.vue
 │   │   ├── stores/
 │   │   │   ├── sessions.ts
 │   │   │   ├── libraries.ts
 │   │   │   └── documents.ts
 │   │   └── composables/
-│   │       └── useChatSocket.ts  # WebSocket logic
+│   │       └── useChatSocket.ts     # WebSocket logic
 │   └── vite.config.ts
 │
-├── chroma_data/                 # ChromaDB local persistence
-├── uploads/                     # raw PDF files
-└── chatpdf.db                   # SQLite file
+├── chroma_data/                     # ChromaDB local persistence
+├── uploads/                         # raw PDF files
+└── chatpdf.db                       # SQLite file
 ```
 
 ---
