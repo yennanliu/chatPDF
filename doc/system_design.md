@@ -463,11 +463,13 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 - [x] Vite proxy: `/api` → `http://localhost:8000`, `/ws` → `ws://localhost:8000`
 - [x] `npm run build` passes (TypeScript + Vite bundle, 113 kB)
 
-### Phase 6 — Chat UI (Week 6)
-- [ ] `useChatSocket.ts` composable — connect, send, stream tokens, handle `done`/`error`
-- [ ] `ChatWindow.vue` + `MessageBubble.vue` — token append, source citations
-- [ ] `SessionSidebar.vue` — list, load, rename, delete sessions
-- [ ] Session create modal: choose library + provider + model
+### Phase 6 — Chat UI ✅ DONE
+- [x] `useChatSocket.ts` — reactive composable: connects WS per session, queues pending queries, streams tokens into reactive `messages[]`, teardown on unmount; reconnects on session switch
+- [x] `ChatWindow.vue` — loads history via `GET /api/sessions/{id}` on session select, auto-scrolls, Enter-to-send (Shift+Enter = newline), streaming send-button spinner
+- [x] `MessageBubble.vue` — user (right/blue) and assistant (left/white) bubbles; blinking cursor while streaming; collapsible source citations with score colour-coding
+- [x] `SessionSidebar.vue` — session list with inline rename / delete; active highlight; "New" button
+- [x] Session create modal — library dropdown, provider toggle (OpenAI/Google/Anthropic), model selector per provider, optional title; auto-selects most-recent session on page load
+- [x] `npm run build` passes (TypeScript + Vite, 134 kB)
 
 ### Phase 7 — Integration Polish (Week 7)
 - [ ] End-to-end test: upload → library → session → chat → reload
