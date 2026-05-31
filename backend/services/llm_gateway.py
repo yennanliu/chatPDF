@@ -14,11 +14,11 @@ from config import settings
 class LLMGateway:
     def get_llm(self, provider: str, model: str) -> BaseChatModel:
         if provider == "openai":
-            return ChatOpenAI(model=model, api_key=settings.openai_api_key, streaming=True)
+            return ChatOpenAI(model=model, api_key=settings.openai_api_key, streaming=True, max_retries=0)
         if provider == "google":
-            return ChatGoogleGenerativeAI(model=model, google_api_key=settings.resolved_google_api_key)
+            return ChatGoogleGenerativeAI(model=model, google_api_key=settings.resolved_google_api_key, max_retries=0)
         if provider == "anthropic":
-            return ChatAnthropic(model=model, api_key=settings.anthropic_api_key)
+            return ChatAnthropic(model=model, api_key=settings.anthropic_api_key, max_retries=0)
         raise ValueError(f"Unknown provider '{provider}'. Use openai | google | anthropic")
 
     async def stream(self, llm: BaseChatModel, messages: list[BaseMessage]) -> AsyncIterator[str]:

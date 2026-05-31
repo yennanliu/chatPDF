@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlmodel import Session as DBSession
 from sqlmodel import select
@@ -14,6 +16,17 @@ from services.rag_config import RAGConfig
 from vector_store import VectorStore, get_vector_store
 
 router = APIRouter(tags=["chat"])
+
+
+def _friendly_error(exc: Exception) -> str:
+    msg = str(exc)
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+        retry_match = re.search(r"retry[^\d]*(\d+(?:\.\d+)?)s", msg, re.IGNORECASE)
+        retry_hint = f" Please retry in ~{int(float(retry_match.group(1)))}s." if retry_match else ""
+        return f"API quota exceeded for this model.{retry_hint}"
+    if "401" in msg or "API key" in msg.lower() or "authentication" in msg.lower():
+        return "Invalid or missing API key for this provider."
+    return msg
 
 
 @router.websocket("/ws/chat/{session_id}")
@@ -69,6 +82,6 @@ async def chat_ws(
         pass
     except Exception as exc:
         try:
-            await websocket.send_json({"type": "error", "detail": str(exc)})
+            await websocket.send_json({"type": "error", "detail": _friendly_error(exc)})
         except Exception:
             pass
