@@ -9,7 +9,6 @@ from langgraph.graph import END, StateGraph
 from services.rag_config import RAGConfig, build_reranker
 from vector_store import VectorStore
 
-
 _SYSTEM = (
     "You are a helpful assistant. Answer questions based solely on the provided "
     "context from PDF documents. If the context is insufficient, say so clearly.\n\n"

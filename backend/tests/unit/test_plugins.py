@@ -12,12 +12,12 @@ Contracts under test:
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-
+from services.plugins.chunkers import SentenceChunker
+from services.plugins.embedders import LocalEmbedder, OpenAIEmbedder
+from services.plugins.rerankers import CrossEncoderReranker
+from services.plugins.retrievers import DenseRetriever, HybridRetriever
 
 # ── SentenceChunker ───────────────────────────────────────────────────────────
-
-from services.plugins.chunkers import SentenceChunker
 
 
 def test_sentence_chunker_splits_basic_text():
@@ -62,9 +62,6 @@ def test_sentence_chunker_accumulates_sentences_until_limit():
 
 # ── DenseRetriever ────────────────────────────────────────────────────────────
 
-from services.plugins.retrievers import DenseRetriever, HybridRetriever
-
-
 def test_dense_retriever_delegates_to_vs():
     vs = MagicMock()
     vs.query.return_value = [{"text": "result", "score": 0.9}]
@@ -90,9 +87,6 @@ def test_hybrid_retriever_stores_alpha():
 
 
 # ── LocalEmbedder ─────────────────────────────────────────────────────────────
-
-from services.plugins.embedders import LocalEmbedder, OpenAIEmbedder
-
 
 def test_local_embedder_returns_float_lists():
     mock_ef_instance = MagicMock(return_value=[[0.1] * 384, [0.2] * 384])
@@ -150,9 +144,6 @@ def test_openai_embedder_uses_correct_model():
 
 
 # ── CrossEncoderReranker ──────────────────────────────────────────────────────
-
-from services.plugins.rerankers import CrossEncoderReranker
-
 
 def test_cross_encoder_reranker_lazy_loads_model():
     reranker = CrossEncoderReranker()

@@ -33,7 +33,7 @@ function truncate(text: string, max = 160) {
   <div v-else class="row row-assistant">
     <div class="avatar">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+        <circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
       </svg>
     </div>
     <div class="assistant-body">
@@ -47,14 +47,14 @@ function truncate(text: string, max = 160) {
       <div v-if="hasSources" class="sources-wrap">
         <button class="sources-toggle" @click="sourcesOpen = !sourcesOpen">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
           </svg>
           {{ (message.sources?.length ?? 0) }} source{{ (message.sources?.length ?? 0) !== 1 ? 's' : '' }}
           <svg
             width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
             :style="{ transform: sourcesOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }"
           >
-            <polyline points="6 9 12 15 18 9"/>
+            <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
 

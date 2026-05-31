@@ -71,10 +71,10 @@ function isUploading(name: string) { return uploadingNames.value.has(name) }
       />
       <div class="drop-icon">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="12" y1="18" x2="12" y2="12"/>
-          <polyline points="9 15 12 12 15 15"/>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="12" y1="18" x2="12" y2="12" />
+          <polyline points="9 15 12 12 15 15" />
         </svg>
       </div>
       <p class="drop-label">Drop PDFs here or <strong>click to browse</strong></p>
@@ -95,8 +95,8 @@ function isUploading(name: string) { return uploadingNames.value.has(name) }
     <!-- ── Empty state ────────────────────────────────────────────────────── -->
     <div v-else-if="!displayDocs.length" class="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
       </svg>
       <p>No documents yet. Drop a PDF above to get started.</p>
     </div>
@@ -113,8 +113,8 @@ function isUploading(name: string) { return uploadingNames.value.has(name) }
         <template v-if="'_uploading' in entry">
           <div class="doc-info">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--clr-primary)">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
             </svg>
             <div>
               <span class="doc-name">{{ entry.name }}</span>
@@ -132,8 +132,8 @@ function isUploading(name: string) { return uploadingNames.value.has(name) }
         <template v-else>
           <div class="doc-info">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--clr-primary)">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
             </svg>
             <div>
               <span class="doc-name">{{ (entry as Document).name }}</span>
@@ -159,9 +159,9 @@ function isUploading(name: string) { return uploadingNames.value.has(name) }
               @click="store.deleteDocument((entry as Document).doc_id)"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14H6L5 6"/>
-                <path d="M10 11v6m4-6v6"/>
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6m4-6v6" />
               </svg>
             </button>
           </div>

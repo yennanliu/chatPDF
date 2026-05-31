@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from typing import AsyncIterator, Union
-
 import chromadb
 import pytest
 from chromadb.api.types import Documents, Embeddings
 from chromadb.utils.embedding_functions import EmbeddingFunction
 from httpx import ASGITransport, AsyncClient
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -17,7 +15,6 @@ from db import get_db
 from main import app
 from services.llm_gateway import LLMGateway, get_llm_gateway
 from vector_store import VectorStore, get_vector_store
-
 
 # ── Fake embedding function (no model download) ───────────────────────────────
 
@@ -52,8 +49,8 @@ class _FakeChatModel(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content=self.response))])
 
     async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
-        from langchain_core.outputs import ChatGenerationChunk
         from langchain_core.messages import AIMessageChunk
+        from langchain_core.outputs import ChatGenerationChunk
         for word in self.response.split():
             yield ChatGenerationChunk(message=AIMessageChunk(content=word + " "))
 

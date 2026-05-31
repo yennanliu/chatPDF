@@ -7,7 +7,6 @@ Contract under test:
     - done sentinel always emitted as last item
     - sources limited by rerank_top_n when reranker active
 """
-import pytest
 from unittest.mock import MagicMock, patch
 
 from services.rag import run_rag_stream

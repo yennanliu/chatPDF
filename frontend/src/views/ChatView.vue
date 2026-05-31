@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useSessionsStore } from '@/stores/sessions'
 import { useLibrariesStore } from '@/stores/libraries'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import ChatWindow     from '@/components/ChatWindow.vue'
 
-const router        = useRouter()
 const sessStore     = useSessionsStore()
 const libStore      = useLibrariesStore()
 
@@ -99,9 +97,9 @@ onMounted(async () => {
         @click="sessionDrawerOpen = true"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
         Sessions
       </button>
@@ -113,7 +111,7 @@ onMounted(async () => {
         <p>Select a session from the sidebar, or create a new one.</p>
         <button class="btn btn-primary" @click="openModal">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
           New Chat
         </button>
@@ -132,7 +130,7 @@ onMounted(async () => {
             <h2>New Chat Session</h2>
             <button class="btn btn-icon btn-ghost" @click="showModal = false">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>

@@ -15,7 +15,6 @@ import pytest
 import services.llm_gateway as gw_module
 from services.llm_gateway import LLMGateway
 
-
 # ── provider routing ──────────────────────────────────────────────────────────
 
 def test_get_llm_openai_calls_chat_openai():

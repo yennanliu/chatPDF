@@ -9,11 +9,10 @@ Contract under test:
 """
 from unittest.mock import MagicMock
 
-from services.rag_config import RAGConfig, build_chunker, build_reranker, build_retriever
 from services.plugins.chunkers import RecursiveChunker, SentenceChunker
 from services.plugins.rerankers import NoopReranker
 from services.plugins.retrievers import DenseRetriever, HybridRetriever
-
+from services.rag_config import RAGConfig, build_chunker, build_reranker, build_retriever
 
 # ── RAGConfig ─────────────────────────────────────────────────────────────────
 

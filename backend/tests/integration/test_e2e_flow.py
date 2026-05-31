@@ -9,7 +9,6 @@ operations, cascade assumptions, history accumulation, and status transitions.
 """
 import io
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _upload(tc, sample_pdf, name: str = "e2e.pdf"):

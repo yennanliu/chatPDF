@@ -100,15 +100,15 @@ const showReconnectBanner = computed(() =>
     <!-- ── WS error / reconnect banner ───────────────────────────────────── -->
     <div v-if="showReconnectBanner" class="reconnect-banner">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
       <span>Connection lost{{ wsError ? `: ${wsError}` : '' }}</span>
       <button class="btn btn-sm btn-primary" @click="reconnect">Reconnect</button>
     </div>
 
     <!-- ── Message list ────────────────────────────────────────────────────── -->
-    <div class="message-list" ref="listEl">
+    <div ref="listEl" class="message-list">
       <div v-if="loading" class="center-hint">
         <span class="spinner" /> Loading history…
       </div>
@@ -140,8 +140,8 @@ const showReconnectBanner = computed(() =>
         >
           <span v-if="isStreaming" class="spinner" style="width:14px;height:14px" />
           <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="22" y1="2" x2="11" y2="13"/>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
         </button>
       </div>

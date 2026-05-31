@@ -10,7 +10,6 @@ Contract under test:
   POST   /api/libraries/{id}/documents              → 200, doc added
   DELETE /api/libraries/{id}/documents/{doc_id}     → 200, doc removed
 """
-import pytest
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -59,7 +58,7 @@ async def test_list_libraries_returns_all(client):
     await _create_library(client, "Lib A")
     await _create_library(client, "Lib B")
     resp = await client.get("/api/libraries")
-    names = [l["name"] for l in resp.json()]
+    names = [lib["name"] for lib in resp.json()]
     assert "Lib A" in names
     assert "Lib B" in names
 

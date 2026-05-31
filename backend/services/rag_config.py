@@ -5,8 +5,8 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from vector_store import VectorStore
     from services.plugins.base import BaseChunker, BaseReranker, BaseRetriever
+    from vector_store import VectorStore
 
 
 @dataclass

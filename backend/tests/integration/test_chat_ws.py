@@ -13,7 +13,6 @@ Contract under test:
     - Source citation shape: doc_name, chunk_preview, score
     - Two sessions on same library are history-independent
 """
-import pytest
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -166,7 +165,7 @@ def test_rag_config_overrides_are_independent_per_library(ws_client, sample_pdf)
         }).json()["session_id"]
 
     sid1 = _make_session(top_k=1)
-    sid5 = _make_session(top_k=5)
+    _make_session(top_k=5)
 
     def _sources(sid):
         with ws_client.websocket_connect(f"/ws/chat/{sid}") as ws:

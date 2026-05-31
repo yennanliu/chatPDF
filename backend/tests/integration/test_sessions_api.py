@@ -9,7 +9,6 @@ Contract under test:
   DELETE /api/sessions/{id}       → 204
   Session reload reconstructs full message history via GET /{id}
 """
-import pytest
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

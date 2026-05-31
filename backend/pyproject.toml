@@ -26,7 +26,16 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "ruff>=0.15.15",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]   # pycodestyle + pyflakes + warnings + isort
+ignore = ["E501"]                # line length: already enforced by line-length setting
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
