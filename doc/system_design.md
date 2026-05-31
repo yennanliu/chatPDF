@@ -450,11 +450,18 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 
 ### ── FRONTEND ─────────────────────────────────────────
 
-### Phase 5 — FE Skeleton + Document/Library UI (Week 5)
-- [ ] `npm create vue@latest frontend` — Vite + Pinia + Vue Router
-- [ ] `documents` store + `PDFUploader.vue` — upload, list, delete
-- [ ] `libraries` store + library list/create/rename/delete views
-- [ ] `LibraryPicker.vue` — add/remove docs from a library
+### Phase 5 — FE Skeleton + Document/Library UI ✅ DONE
+- [x] Vue 3 + Pinia + Vue Router + TypeScript + Vite — `npm run dev` at `http://localhost:5173`
+- [x] `stores/documents.ts` — upload (BackgroundTasks), list, delete, status polling
+- [x] `stores/libraries.ts` — full CRUD + doc membership (add/remove)
+- [x] `stores/sessions.ts` — fetch, create, rename, delete (wired in Phase 6)
+- [x] `PDFUploader.vue` — drag-drop zone, status badges (pending spinner → indexed/error), delete
+- [x] `LibrariesView.vue` — two-panel: library list with create/rename/delete + detail panel
+- [x] `LibraryPicker.vue` — "In this library" / "Available" two-section doc management
+- [x] `ChatView.vue` — stub showing available libraries; full UI in Phase 6
+- [x] CORS middleware added to FastAPI for `http://localhost:5173`
+- [x] Vite proxy: `/api` → `http://localhost:8000`, `/ws` → `ws://localhost:8000`
+- [x] `npm run build` passes (TypeScript + Vite bundle, 113 kB)
 
 ### Phase 6 — Chat UI (Week 6)
 - [ ] `useChatSocket.ts` composable — connect, send, stream tokens, handle `done`/`error`

@@ -157,4 +157,5 @@ No changes to LangGraph or router code needed.
 | 2 — Core RAG + Chat BE | ✅ Done | 49 | — |
 | 3 — Multi-LLM + RAG Variants | ✅ Done | 67 | — |
 | 4 — BE Validation Gate | ✅ Done | 93 | 100% services |
-| 5–7 — Frontend | ⬜ Next | — | — |
+| 5 — FE Skeleton | ✅ Done | — | build ✓ |
+| 6–7 — Chat UI + Polish | ⬜ Next | — | — |
