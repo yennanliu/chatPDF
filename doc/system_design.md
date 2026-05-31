@@ -46,6 +46,7 @@
 |-------------|----------------------------|-----------------------------------------------|
 | Frontend     | Vue 3 + Pinia + Vite       | Reactive, lightweight, fast dev cycle         |
 | Backend      | FastAPI                    | Async-native, auto docs, WebSocket support    |
+| Pkg manager  | `uv`                       | Fast, lockfile-based, replaces pip + venv     |
 | Vector DB    | ChromaDB (local persist)   | Zero-server, file-based, easy to reset        |
 | SQL DB       | SQLite via SQLModel        | Simple, no infra, sufficient for single user  |
 | Embeddings   | OpenAI `text-embedding-3-small` or `sentence-transformers` (local) | Swappable |
@@ -300,6 +301,10 @@ User              Vue 3              FastAPI           SQLite
 ```
 chatpdf/
 ├── backend/
+│   ├── pyproject.toml           # uv project manifest + dependencies
+│   ├── uv.lock                  # locked dependency tree (commit this)
+│   ├── .env                     # API keys — never commit
+│   ├── .env.example             # template with key names, no values
 │   ├── main.py                  # FastAPI app, WS registration
 │   ├── routers/
 │   │   ├── documents.py
@@ -338,7 +343,71 @@ chatpdf/
 
 ---
 
-## 8. Concerns & Things to Improve
+## 8. Backend Tooling & Configuration
+
+### Package Management — `uv`
+
+```bash
+# bootstrap the project
+uv init backend && cd backend
+uv add fastapi uvicorn sqlmodel chromadb langchain langgraph pymupdf python-dotenv
+
+# run dev server
+uv run uvicorn main:app --reload
+
+# add a new dep
+uv add some-package
+
+# sync after pulling (replaces pip install -r requirements.txt)
+uv sync
+```
+
+Commit `pyproject.toml` and `uv.lock`; never commit `.env`.
+
+### Environment Variables — `.env`
+
+```bash
+# backend/.env.example  (commit this as documentation)
+
+# LLM providers — add only the keys you use
+OPENAI_API_KEY=
+GOOGLE_API_KEY=
+ANTHROPIC_API_KEY=
+
+# Active embedding backend: "openai" | "local"
+EMBEDDING_BACKEND=local
+
+# Paths (defaults work out-of-the-box)
+CHROMA_DATA_DIR=../chroma_data
+UPLOAD_DIR=../uploads
+SQLITE_URL=sqlite:///../chatpdf.db
+```
+
+Load in FastAPI via `python-dotenv` + Pydantic Settings:
+
+```python
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    openai_api_key: str = ""
+    google_api_key: str = ""
+    anthropic_api_key: str = ""
+    embedding_backend: str = "local"
+    chroma_data_dir: str = "../chroma_data"
+    upload_dir: str = "../uploads"
+    sqlite_url: str = "sqlite:///../chatpdf.db"
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+Add `.env` to `.gitignore`; only `.env.example` is tracked in version control.
+
+---
+
+## 9. Concerns & Things to Improve
 
 ### Current Limitations
 
