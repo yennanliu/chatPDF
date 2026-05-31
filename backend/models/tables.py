@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import Optional
 import uuid
 
+from sqlalchemy import Column, ForeignKey, String
 from sqlmodel import Field, SQLModel
 
 
@@ -28,15 +29,23 @@ class Library(SQLModel, table=True):
 
 class LibraryDocument(SQLModel, table=True):
     __tablename__ = "library_document"
-    library_id: str = Field(foreign_key="library.id", primary_key=True)
-    document_id: str = Field(foreign_key="document.id", primary_key=True)
+    # ON DELETE CASCADE: rows removed when parent library or document is deleted
+    library_id: str = Field(
+        sa_column=Column(String, ForeignKey("library.id", ondelete="CASCADE"), primary_key=True)
+    )
+    document_id: str = Field(
+        sa_column=Column(String, ForeignKey("document.id", ondelete="CASCADE"), primary_key=True)
+    )
     added_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Session(SQLModel, table=True):
     id: str = Field(default_factory=_new_id, primary_key=True)
     title: str = "New Chat"
-    library_id: str = Field(foreign_key="library.id")
+    # ON DELETE CASCADE: sessions removed when owning library is deleted
+    library_id: str = Field(
+        sa_column=Column(String, ForeignKey("library.id", ondelete="CASCADE"), nullable=False)
+    )
     provider: str  # openai | google | anthropic
     model: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -45,7 +54,10 @@ class Session(SQLModel, table=True):
 
 class Message(SQLModel, table=True):
     id: str = Field(default_factory=_new_id, primary_key=True)
-    session_id: str = Field(foreign_key="session.id")
+    # ON DELETE CASCADE: messages removed when owning session is deleted
+    session_id: str = Field(
+        sa_column=Column(String, ForeignKey("session.id", ondelete="CASCADE"), nullable=False)
+    )
     role: str  # user | assistant
     content: str
     sources: Optional[str] = None  # JSON: [{doc_name, chunk_preview, score}]

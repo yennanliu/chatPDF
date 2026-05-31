@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import AsyncIterator, TypedDict, Union
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from services.rag_config import RAGConfig
+from services.rag_config import RAGConfig, build_reranker
 from vector_store import VectorStore
 
 
@@ -35,7 +35,7 @@ def _make_graph(vs: VectorStore):
     return g.compile()
 
 
-def _messages(query: str, context: list[dict], history: list[BaseMessage]) -> list[BaseMessage]:
+def _build_messages(query: str, context: list[dict], history: list[BaseMessage]) -> list[BaseMessage]:
     ctx = "\n\n".join(c["text"] for c in context) or "No relevant context found."
     return [SystemMessage(content=_SYSTEM.format(context=ctx)), *history, HumanMessage(content=query)]
 
@@ -48,6 +48,7 @@ async def run_rag_stream(
     vs: VectorStore,
     llm: BaseChatModel,
 ) -> AsyncIterator[Union[str, dict]]:
+    # 1. Retrieve via LangGraph
     graph = _make_graph(vs)
     state = await graph.ainvoke({
         "query": query,
@@ -57,10 +58,17 @@ async def run_rag_stream(
     })
     context: list[dict] = state["context"]
 
-    async for chunk in llm.astream(_messages(query, context, history)):
+    # 2. Rerank if configured (anything other than "none")
+    if rag_config.reranker != "none" and context:
+        reranker = build_reranker(rag_config)
+        context = reranker.rerank(query, context)[: rag_config.rerank_top_n]
+
+    # 3. Stream tokens from LLM
+    async for chunk in llm.astream(_build_messages(query, context, history)):
         if chunk.content:
             yield str(chunk.content)
 
+    # 4. Emit done sentinel with source citations
     sources = [
         {
             "doc_name": c["metadata"].get("file", ""),

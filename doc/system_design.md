@@ -423,14 +423,17 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 - [x] Session CRUD + message persistence
 > **49 tests, 0.52s** — `FakeLLMGateway` keeps WS tests offline
 
-### Phase 3 — Multi-LLM + RAG Variants (Week 3)
-- [ ] **[TDD]** Test: `LLMGateway.get_llm` returns correct adapter per provider
-- [ ] LangChain adapters for Gemini + Claude
-- [ ] **[TDD]** Test: two sessions on same library get independent histories
-- [ ] Cross-collection Chroma search; source citations in response
-- [ ] **[TDD]** Test: `RAGConfig` on library overrides chunker/retriever at runtime
-- [ ] **[TDD]** Test: delete document cascades vectors + library memberships
-- [ ] Document delete, session delete, library delete/rename
+### Phase 3 — Multi-LLM + RAG Variants ✅ DONE
+- [x] **[TDD]** Test: `LLMGateway.get_llm` returns correct adapter per provider
+- [x] LangChain adapters for Gemini + Claude (module-level imports for patchability)
+- [x] **[TDD]** Test: two sessions on same library get independent histories
+- [x] Cross-collection Chroma search; source citations in response
+- [x] **[TDD]** Test: `RAGConfig` on library overrides `top_k` at runtime
+- [x] **[TDD]** Test: delete document cascades vectors + library memberships
+- [x] Document delete, session delete, library delete/rename
+- [x] FK CASCADE enforced via SQLite pragma + `ondelete="CASCADE"` on all FK columns
+- [x] Reranker applied in `run_rag_stream` when `rag_config.reranker != "none"`
+> **67 tests, 0.64s** — all cascade, citation-shape, cross-collection, and provider-routing tests green
 
 ### Phase 4 — BE Validation Gate (Week 4)
 > All tests green. Manually exercise every endpoint in Swagger UI at `/docs` before writing any frontend code.

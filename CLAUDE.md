@@ -155,6 +155,6 @@ No changes to LangGraph or router code needed.
 |---|---|---|
 | 1 — BE Skeleton | ✅ Done | 20 |
 | 2 — Core RAG + Chat BE | ✅ Done | 49 |
-| 3 — Multi-LLM + RAG Variants | ⬜ Next | — |
-| 4 — BE Validation Gate | ⬜ | — |
+| 3 — Multi-LLM + RAG Variants | ✅ Done | 67 |
+| 4 — BE Validation Gate | ⬜ Next | — |
 | 5–7 — Frontend | ⬜ | — |
