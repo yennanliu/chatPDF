@@ -10,60 +10,84 @@ function closeNav() { navOpen.value = false }
 
 <template>
   <div class="layout">
-    <!-- Mobile top bar ──────────────────────────────────────────────────────── -->
+    <!-- Mobile top bar ───────────────────────────────────────────────────────── -->
     <div class="mobile-bar">
       <button class="hamburger" :aria-expanded="navOpen" @click="navOpen = !navOpen">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <line v-if="!navOpen" x1="3" y1="6" x2="21" y2="6" />
+          <line v-if="!navOpen" x1="3" y1="6"  x2="21" y2="6"  />
           <line v-if="!navOpen" x1="3" y1="12" x2="21" y2="12" />
           <line v-if="!navOpen" x1="3" y1="18" x2="21" y2="18" />
-          <line v-if="navOpen" x1="18" y1="6" x2="6" y2="18" />
-          <line v-if="navOpen" x1="6" y1="6" x2="18" y2="18" />
+          <line v-if="navOpen"  x1="18" y1="6"  x2="6" y2="18" />
+          <line v-if="navOpen"  x1="6"  y1="6" x2="18" y2="18" />
         </svg>
       </button>
-      <span class="mobile-title">📄 ChatPDF</span>
+      <div class="mobile-brand">
+        <div class="brand-mark-sm">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <span class="mobile-title">ChatPDF</span>
+      </div>
     </div>
 
-    <!-- Nav backdrop (mobile) ───────────────────────────────────────────────── -->
+    <!-- Nav backdrop (mobile) ────────────────────────────────────────────────── -->
     <div v-if="navOpen" class="nav-backdrop" @click="closeNav" />
 
-    <!-- Sidebar nav ─────────────────────────────────────────────────────────── -->
+    <!-- Sidebar ──────────────────────────────────────────────────────────────── -->
     <aside class="sidebar" :class="{ open: navOpen }">
       <div class="sidebar-brand">
-        <span class="brand-icon">📄</span>
+        <div class="brand-mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
         <span class="brand-text">ChatPDF</span>
       </div>
 
       <nav class="sidebar-nav">
         <RouterLink
           to="/"
-          :class="['nav-item', route.path === '/' ? 'active' : '']"
+          :class="['nav-item', 'nav-docs', route.path === '/' ? 'active' : '']"
           @click="closeNav"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
+          <span class="nav-icon nav-icon-orange">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+          </span>
           Documents
         </RouterLink>
+
         <RouterLink
           to="/libraries"
-          :class="['nav-item', route.path.startsWith('/libraries') ? 'active' : '']"
+          :class="['nav-item', 'nav-libs', route.path.startsWith('/libraries') ? 'active' : '']"
           @click="closeNav"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
+          <span class="nav-icon nav-icon-green">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </span>
           Libraries
         </RouterLink>
+
         <RouterLink
           to="/chat"
-          :class="['nav-item', route.path.startsWith('/chat') ? 'active' : '']"
+          :class="['nav-item', 'nav-chat', route.path.startsWith('/chat') ? 'active' : '']"
           @click="closeNav"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <span class="nav-icon nav-icon-purple">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </span>
           Chat
         </RouterLink>
       </nav>
@@ -71,16 +95,16 @@ function closeNav() { navOpen.value = false }
       <div class="sidebar-footer">
         <a href="http://localhost:8000/docs" target="_blank" class="sidebar-link">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           API Docs
         </a>
       </div>
     </aside>
 
-    <!-- Main content ────────────────────────────────────────────────────────── -->
+    <!-- Main content ─────────────────────────────────────────────────────────── -->
     <main class="main-content">
       <RouterView />
     </main>
@@ -88,97 +112,128 @@ function closeNav() { navOpen.value = false }
 </template>
 
 <style scoped>
-/* ── Base layout ─────────────────────────────────────────────────────────────── */
+/* ── Layout ──────────────────────────────────────────────────────────────────── */
 .layout { display: flex; min-height: 100vh; }
 
 /* ── Sidebar ─────────────────────────────────────────────────────────────────── */
 .sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  background: var(--bg-sidebar);
-  display: flex;
-  flex-direction: column;
+  width: 232px; flex-shrink: 0;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
 }
 
 .sidebar-brand {
   display: flex; align-items: center; gap: 10px;
-  padding: 20px 18px 16px;
-  border-bottom: 1px solid rgba(255,255,255,.08);
+  padding: 20px 18px 14px;
 }
-.brand-icon { font-size: 1.4rem; }
-.brand-text { font-size: 1.1rem; font-weight: 700; color: #f8fafc; }
 
+.brand-mark {
+  width: 34px; height: 34px; flex-shrink: 0;
+  background: var(--brand-purple);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(162,89,255,.3);
+}
+
+.brand-text {
+  font-size: 1.05rem; font-weight: 700;
+  color: var(--text); letter-spacing: -.02em;
+}
+
+/* ── Nav ─────────────────────────────────────────────────────────────────────── */
 .sidebar-nav {
-  flex: 1; padding: 12px 8px;
+  flex: 1; padding: 8px 10px;
   display: flex; flex-direction: column; gap: 2px;
 }
 
 .nav-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; border-radius: 6px;
-  color: #94a3b8; text-decoration: none;
-  font-size: 0.9rem; font-weight: 500;
+  padding: 9px 10px; border-radius: 10px;
+  color: var(--text-muted); text-decoration: none;
+  font-size: .875rem; font-weight: 500;
   transition: background .15s, color .15s;
 }
-.nav-item:hover  { background: rgba(255,255,255,.08); color: #e2e8f0; }
-.nav-item.active { background: var(--clr-primary); color: #fff; }
-.nav-item svg    { flex-shrink: 0; }
+.nav-item:hover { background: var(--bg-alt); color: var(--text); }
 
+.nav-item.active { font-weight: 600; }
+.nav-docs.active  { background: rgba(242,78,30,.08);  color: var(--brand-orange); }
+.nav-libs.active  { background: rgba(10,207,131,.08); color: #089e62; }
+.nav-chat.active  { background: rgba(162,89,255,.1);  color: var(--brand-purple); }
+
+/* Nav icon pill */
+.nav-icon {
+  width: 26px; height: 26px; flex-shrink: 0;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.nav-icon-orange { background: rgba(242,78,30,.1);   color: var(--brand-orange); }
+.nav-icon-green  { background: rgba(10,207,131,.1);  color: var(--brand-green); }
+.nav-icon-purple { background: rgba(162,89,255,.1);  color: var(--brand-purple); }
+
+/* ── Sidebar footer ──────────────────────────────────────────────────────────── */
 .sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid rgba(255,255,255,.08);
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
 }
 .sidebar-link {
-  display: flex; align-items: center; gap: 6px;
-  color: #64748b; text-decoration: none; font-size: 0.8rem;
+  display: flex; align-items: center; gap: 7px;
+  color: var(--text-muted); text-decoration: none;
+  font-size: .8rem; font-weight: 500;
   transition: color .15s;
 }
-.sidebar-link:hover { color: #94a3b8; }
+.sidebar-link:hover { color: var(--text); }
 
 /* ── Main content ────────────────────────────────────────────────────────────── */
 .main-content { flex: 1; min-width: 0; overflow-y: auto; }
 
 /* ── Mobile elements (hidden on desktop) ─────────────────────────────────────── */
-.mobile-bar  { display: none; }
+.mobile-bar   { display: none; }
 .nav-backdrop { display: none; }
 
-/* ── Responsive: ≤ 768 px ────────────────────────────────────────────────────── */
+/* ── Responsive ≤ 768 px ─────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .layout { flex-direction: column; }
 
-  /* Top bar */
   .mobile-bar {
     display: flex; align-items: center; gap: 12px;
-    height: 52px; padding: 0 16px;
-    background: var(--bg-sidebar);
-    position: sticky; top: 0; z-index: 60;
-    flex-shrink: 0;
+    height: 54px; padding: 0 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 60; flex-shrink: 0;
   }
   .hamburger {
     background: none; border: none; cursor: pointer;
-    color: #94a3b8; padding: 4px; border-radius: 4px;
+    color: var(--text-muted); padding: 4px; border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
   }
-  .hamburger:hover { color: #f1f5f9; }
-  .mobile-title { font-size: 1rem; font-weight: 700; color: #f8fafc; }
+  .hamburger:hover { background: var(--bg-alt); color: var(--text); }
 
-  /* Sidebar becomes a slide-in drawer */
+  .mobile-brand { display: flex; align-items: center; gap: 8px; }
+  .brand-mark-sm {
+    width: 26px; height: 26px;
+    background: var(--brand-purple); border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+  }
+  .mobile-title { font-size: .95rem; font-weight: 700; color: var(--text); }
+
   .sidebar {
-    position: fixed; top: 0; left: 0; bottom: 0;
-    z-index: 70;
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 70;
     transform: translateX(-100%);
     transition: transform .25s ease;
-    box-shadow: 4px 0 24px rgba(0,0,0,.3);
+    box-shadow: 4px 0 32px rgba(15,15,20,.12);
   }
   .sidebar.open { transform: translateX(0); }
 
-  /* Backdrop */
   .nav-backdrop {
-    display: block;
-    position: fixed; inset: 0; z-index: 65;
-    background: rgba(0,0,0,.45);
+    display: block; position: fixed; inset: 0; z-index: 65;
+    background: rgba(15,15,20,.35);
+    backdrop-filter: blur(2px);
   }
 
-  .main-content { min-height: calc(100vh - 52px); overflow-y: auto; }
+  .main-content { min-height: calc(100vh - 54px); overflow-y: auto; }
 }
 </style>

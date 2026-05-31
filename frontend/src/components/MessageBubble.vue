@@ -10,14 +10,14 @@ const hasSources = computed(
   () => !props.message.isStreaming && (props.message.sources?.length ?? 0) > 0,
 )
 
-function scoreColor(score: number) {
-  if (score >= 0.8) return '#16a34a'
-  if (score >= 0.5) return '#d97706'
-  return '#64748b'
+function truncate(text: string, max = 180) {
+  return text.length <= max ? text : text.slice(0, max) + '…'
 }
 
-function truncate(text: string, max = 160) {
-  return text.length <= max ? text : text.slice(0, max) + '…'
+function scoreColor(score: number) {
+  if (score >= 0.8) return 'var(--brand-green)'
+  if (score >= 0.5) return '#f59e0b'
+  return 'var(--text-muted)'
 }
 </script>
 
@@ -32,10 +32,12 @@ function truncate(text: string, max = 160) {
   <!-- Assistant message -->
   <div v-else class="row row-assistant">
     <div class="avatar">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
       </svg>
     </div>
+
     <div class="assistant-body">
       <div class="bubble bubble-assistant" :class="{ streaming: message.isStreaming }">
         <span class="content">{{ message.content }}</span>
@@ -43,24 +45,31 @@ function truncate(text: string, max = 160) {
         <span v-if="message.isStreaming" class="cursor" aria-hidden="true" />
       </div>
 
-      <!-- Source citations -->
+      <!-- Sources -->
       <div v-if="hasSources" class="sources-wrap">
         <button class="sources-toggle" @click="sourcesOpen = !sourcesOpen">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
           </svg>
-          {{ (message.sources?.length ?? 0) }} source{{ (message.sources?.length ?? 0) !== 1 ? 's' : '' }}
+          {{ message.sources?.length }} source{{ (message.sources?.length ?? 0) !== 1 ? 's' : '' }}
           <svg
-            width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
             :style="{ transform: sourcesOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }"
           >
-            <polyline points="6 9 12 15 18 9" />
+            <polyline points="6 9 12 15 18 9"/>
           </svg>
         </button>
 
         <div v-if="sourcesOpen" class="sources-list">
           <div v-for="(src, i) in (message.sources as Source[])" :key="i" class="source-card">
             <div class="source-header">
+              <div class="source-file-icon">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
               <span class="source-name">{{ src.doc_name }}</span>
               <span class="source-score" :style="{ color: scoreColor(src.score) }">
                 {{ (src.score * 100).toFixed(0) }}%
@@ -75,79 +84,71 @@ function truncate(text: string, max = 160) {
 </template>
 
 <style scoped>
-/* ── Row layout ─────────────────────────────────────────────────────────────── */
-.row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 6px 0;
-}
+/* ── Row layout ──────────────────────────────────────────────────────────────── */
+.row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; }
 .row-user      { justify-content: flex-end; }
 .row-assistant { justify-content: flex-start; }
 
-/* ── Avatar ─────────────────────────────────────────────────────────────────── */
+/* ── Avatar ──────────────────────────────────────────────────────────────────── */
 .avatar {
-  width: 28px; height: 28px; flex-shrink: 0;
-  background: var(--clr-primary); color: #fff;
-  border-radius: 50%;
+  width: 30px; height: 30px; flex-shrink: 0;
+  background: rgba(162,89,255,.15); color: var(--brand-purple);
+  border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
-/* ── Bubbles ────────────────────────────────────────────────────────────────── */
+/* ── Bubbles ─────────────────────────────────────────────────────────────────── */
 .bubble {
   max-width: min(560px, 80vw);
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 0.9rem;
-  line-height: 1.6;
+  padding: 11px 15px;
+  border-radius: 14px;
+  font-size: .9rem; line-height: 1.65;
   word-break: break-word;
 }
 
 .bubble-user {
-  background: var(--clr-primary);
+  background: var(--brand-purple);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
 
 .bubble-assistant {
-  background: var(--bg-surface);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
-  position: relative;
+  box-shadow: var(--shadow-sm);
 }
 
 .content { white-space: pre-wrap; }
 
-/* ── Streaming indicators ───────────────────────────────────────────────────── */
-.thinking { color: var(--txt-muted); font-style: italic; }
-
+/* ── Streaming ───────────────────────────────────────────────────────────────── */
+.thinking { color: var(--text-muted); font-style: italic; }
 .cursor {
-  display: inline-block;
-  width: 2px; height: 1.1em;
-  background: var(--clr-primary);
-  margin-left: 2px;
-  vertical-align: text-bottom;
+  display: inline-block; width: 2px; height: 1.1em;
+  background: var(--brand-purple);
+  margin-left: 2px; vertical-align: text-bottom;
   animation: blink .7s step-end infinite;
 }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
-/* ── Assistant body (bubble + sources) ─────────────────────────────────────── */
+/* ── Assistant body ──────────────────────────────────────────────────────────── */
 .assistant-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
-/* ── Sources ────────────────────────────────────────────────────────────────── */
-.sources-wrap { display: flex; flex-direction: column; gap: 4px; }
+/* ── Sources ─────────────────────────────────────────────────────────────────── */
+.sources-wrap { display: flex; flex-direction: column; gap: 6px; }
 
 .sources-toggle {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 10px;
-  background: var(--bg-page); border: 1px solid var(--border);
-  border-radius: 99px; cursor: pointer;
-  font-size: 0.78rem; color: var(--txt-muted);
+  padding: 4px 12px;
+  background: rgba(10,207,131,.08); border: 1px solid rgba(10,207,131,.2);
+  color: #089e62;
+  border-radius: var(--radius-pill); cursor: pointer;
+  font-size: .76rem; font-weight: 600;
   transition: background .15s;
   align-self: flex-start;
 }
-.sources-toggle:hover { background: var(--border); }
+.sources-toggle:hover { background: rgba(10,207,131,.14); }
 
 .sources-list {
   display: flex; flex-direction: column; gap: 6px;
@@ -155,24 +156,33 @@ function truncate(text: string, max = 160) {
 }
 
 .source-card {
-  padding: 8px 12px;
-  background: var(--bg-surface);
+  padding: 10px 13px;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .15s;
 }
+.source-card:hover { box-shadow: var(--shadow-card); }
+
 .source-header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 5px;
+}
+.source-file-icon {
+  width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0;
+  background: rgba(10,207,131,.1); color: var(--brand-green);
+  display: flex; align-items: center; justify-content: center;
 }
 .source-name {
-  font-size: 0.8rem; font-weight: 600;
+  flex: 1; font-size: .8rem; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 320px;
+  max-width: 280px;
 }
-.source-score { font-size: 0.78rem; font-weight: 700; flex-shrink: 0; }
+.source-score { font-size: .76rem; font-weight: 700; flex-shrink: 0; }
+
 .source-preview {
-  font-size: 0.78rem; color: var(--txt-muted);
-  line-height: 1.5;
+  font-size: .78rem; color: var(--text-muted); line-height: 1.55;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
   overflow: hidden;
 }

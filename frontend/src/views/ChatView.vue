@@ -8,24 +8,29 @@ import ChatWindow     from '@/components/ChatWindow.vue'
 const sessStore     = useSessionsStore()
 const libStore      = useLibrariesStore()
 
-const activeSessionId  = ref<string | null>(null)
-const showModal        = ref(false)
-const sessionDrawerOpen = ref(false)  // mobile session panel toggle
+const activeSessionId   = ref<string | null>(null)
+const showModal         = ref(false)
+const sessionDrawerOpen = ref(false)
 
-// ── Create-session modal state ────────────────────────────────────────────────
 const form = ref({
   library_id: '',
   provider:   'openai' as 'openai' | 'google' | 'anthropic',
   model:      'gpt-4o',
   title:      '',
 })
-const creating = ref(false)
+const creating    = ref(false)
 const createError = ref<string | null>(null)
 
 const MODELS: Record<string, string[]> = {
   openai:    ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
   google:    ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
   anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+}
+
+const PROVIDER_META: Record<string, { label: string; color: string; bg: string }> = {
+  openai:    { label: 'OpenAI',    color: '#10a37f', bg: 'rgba(16,163,127,.1)' },
+  google:    { label: 'Google',    color: '#1abcfe', bg: 'rgba(26,188,254,.1)' },
+  anthropic: { label: 'Anthropic', color: '#a259ff', bg: 'rgba(162,89,255,.1)' },
 }
 
 function onProviderChange() {
@@ -44,14 +49,14 @@ async function createSession() {
   createError.value = null
   try {
     const sess = await sessStore.createSession({
-      library_id:  form.value.library_id,
-      provider:    form.value.provider,
-      model:       form.value.model,
+      library_id: form.value.library_id,
+      provider:   form.value.provider,
+      model:      form.value.model,
       title:      form.value.title.trim() || undefined,
     })
-    showModal.value = false
+    showModal.value        = false
     sessionDrawerOpen.value = false
-    activeSessionId.value = sess.session_id
+    activeSessionId.value  = sess.session_id
   } catch (e) {
     createError.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -60,11 +65,7 @@ async function createSession() {
 }
 
 onMounted(async () => {
-  await Promise.all([
-    sessStore.fetchSessions(),
-    libStore.fetchLibraries(),
-  ])
-  // Auto-select most recent session if any
+  await Promise.all([sessStore.fetchSessions(), libStore.fetchLibraries()])
   if (!activeSessionId.value && sessStore.sessions.length) {
     activeSessionId.value = sessStore.sessions[0].session_id
   }
@@ -73,14 +74,10 @@ onMounted(async () => {
 
 <template>
   <div class="chat-layout">
-    <!-- ── Mobile drawer backdrop ────────────────────────────────────────── -->
-    <div
-      v-if="sessionDrawerOpen"
-      class="drawer-backdrop"
-      @click="sessionDrawerOpen = false"
-    />
+    <!-- Mobile drawer backdrop -->
+    <div v-if="sessionDrawerOpen" class="drawer-backdrop" @click="sessionDrawerOpen = false" />
 
-    <!-- ── Session sidebar ─────────────────────────────────────────────────── -->
+    <!-- Session sidebar -->
     <div class="session-panel" :class="{ 'drawer-open': sessionDrawerOpen }">
       <SessionSidebar
         :active-session-id="activeSessionId"
@@ -89,48 +86,58 @@ onMounted(async () => {
       />
     </div>
 
-    <!-- ── Chat window or placeholder ────────────────────────────────────── -->
+    <!-- Chat area -->
     <div class="chat-area">
-      <!-- Mobile sessions toggle button -->
-      <button
-        class="mobile-sessions-btn btn btn-ghost btn-sm"
-        @click="sessionDrawerOpen = true"
-      >
+      <button class="mobile-sessions-btn btn btn-ghost btn-sm" @click="sessionDrawerOpen = true">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
         Sessions
       </button>
 
       <ChatWindow v-if="activeSessionId" :session-id="activeSessionId" />
+
       <div v-else class="no-session">
-        <div class="no-session-icon">💬</div>
+        <div class="no-session-art">
+          <div class="art-circle art-c1" />
+          <div class="art-circle art-c2" />
+          <div class="art-circle art-c3" />
+          <svg class="art-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
         <h2>Start a conversation</h2>
-        <p>Select a session from the sidebar, or create a new one.</p>
+        <p>Select a session from the sidebar, or create a new one to get started.</p>
         <button class="btn btn-primary" @click="openModal">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           New Chat
         </button>
         <p v-if="!libStore.libraries.length" class="hint-warn">
-          ⚠ No libraries yet.
-          <RouterLink to="/libraries">Create one first</RouterLink>.
+          No libraries yet — <RouterLink to="/libraries">create one first</RouterLink>.
         </p>
       </div>
     </div>
 
-    <!-- ── Create session modal ───────────────────────────────────────────── -->
+    <!-- Create session modal -->
     <Teleport to="body">
       <div v-if="showModal" class="modal-backdrop" @click.self="showModal = false">
         <div class="modal" role="dialog" aria-modal="true">
           <div class="modal-header">
-            <h2>New Chat Session</h2>
+            <div class="modal-title-wrap">
+              <div class="modal-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <h2>New Chat Session</h2>
+            </div>
             <button class="btn btn-icon btn-ghost" @click="showModal = false">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
             </button>
           </div>
@@ -141,16 +148,12 @@ onMounted(async () => {
               <label class="field-label">Library <span class="required">*</span></label>
               <select v-model="form.library_id" class="input">
                 <option value="" disabled>Choose a library…</option>
-                <option
-                  v-for="lib in libStore.libraries"
-                  :key="lib.library_id"
-                  :value="lib.library_id"
-                >
+                <option v-for="lib in libStore.libraries" :key="lib.library_id" :value="lib.library_id">
                   {{ lib.name }} ({{ lib.documents.length }} docs)
                 </option>
               </select>
               <p v-if="!libStore.libraries.length" class="field-hint warn">
-                No libraries found. <RouterLink to="/libraries">Create one first.</RouterLink>
+                No libraries yet. <RouterLink to="/libraries">Create one first.</RouterLink>
               </p>
             </div>
 
@@ -163,9 +166,10 @@ onMounted(async () => {
                   :key="p"
                   class="provider-btn"
                   :class="{ active: form.provider === p }"
+                  :style="form.provider === p ? { background: PROVIDER_META[p].bg, color: PROVIDER_META[p].color, borderColor: PROVIDER_META[p].color } : {}"
                   @click="form.provider = p as typeof form.provider; onProviderChange()"
                 >
-                  {{ p === 'openai' ? 'OpenAI' : p === 'google' ? 'Google' : 'Anthropic' }}
+                  {{ PROVIDER_META[p].label }}
                 </button>
               </div>
             </div>
@@ -178,7 +182,7 @@ onMounted(async () => {
               </select>
             </div>
 
-            <!-- Title (optional) -->
+            <!-- Title -->
             <div class="field">
               <label class="field-label">Session title <span class="optional">(optional)</span></label>
               <input v-model="form.title" class="input" placeholder="New Chat" />
@@ -189,13 +193,9 @@ onMounted(async () => {
 
           <div class="modal-footer">
             <button class="btn btn-ghost" @click="showModal = false">Cancel</button>
-            <button
-              class="btn btn-primary"
-              :disabled="creating || !form.library_id"
-              @click="createSession"
-            >
+            <button class="btn btn-primary" :disabled="creating || !form.library_id" @click="createSession">
               <span v-if="creating" class="spinner" />
-              Create Session
+              Start chatting
             </button>
           </div>
         </div>
@@ -205,120 +205,116 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* ── Layout ─────────────────────────────────────────────────────────────────── */
-.chat-layout {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
+/* ── Layout ──────────────────────────────────────────────────────────────────── */
+.chat-layout { display: flex; height: 100vh; overflow: hidden; }
 .session-panel { display: flex; flex-shrink: 0; }
-
 .chat-area {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-page);
-  position: relative;
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  background: var(--bg-alt); position: relative;
 }
-
 .mobile-sessions-btn { display: none; }
 
 /* ── Mobile ──────────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .chat-layout { height: calc(100vh - 52px); }
-
-  /* Session panel becomes a slide-in drawer */
+  .chat-layout { height: calc(100vh - 54px); }
   .session-panel {
-    position: fixed; top: 52px; left: 0; bottom: 0;
-    z-index: 55;
-    transform: translateX(-100%);
-    transition: transform .25s ease;
+    position: fixed; top: 54px; left: 0; bottom: 0; z-index: 55;
+    transform: translateX(-100%); transition: transform .25s ease;
   }
   .session-panel.drawer-open { transform: translateX(0); }
-
   .drawer-backdrop {
-    position: fixed; inset: 0; top: 52px;
-    z-index: 50;
-    background: rgba(0,0,0,.4);
+    position: fixed; inset: 0; top: 54px; z-index: 50;
+    background: rgba(15,15,20,.35); backdrop-filter: blur(2px);
   }
-
-  /* "Sessions" toggle button visible on mobile */
   .mobile-sessions-btn {
-    display: flex;
-    position: absolute; top: 8px; left: 8px; z-index: 10;
-    gap: 6px; background: var(--bg-surface);
-    border: 1px solid var(--border);
+    display: flex; position: absolute; top: 10px; left: 10px; z-index: 10;
+    gap: 6px; background: var(--bg); border: 1.5px solid var(--border);
     box-shadow: var(--shadow-sm);
   }
 }
 
-/* ── Empty state ─────────────────────────────────────────────────────────────── */
+/* ── No session empty state ──────────────────────────────────────────────────── */
 .no-session {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  gap: 12px; padding: 32px;
-  color: var(--txt-muted);
+  gap: 14px; padding: 40px; color: var(--text-muted);
 }
-.no-session-icon { font-size: 3rem; }
-.no-session h2   { color: var(--txt-base); }
-.hint-warn { font-size: 0.85rem; }
-.hint-warn a { color: var(--clr-primary); }
+.no-session h2 { color: var(--text); }
 
-/* ── Modal ──────────────────────────────────────────────────────────────────── */
+/* Illustration */
+.no-session-art {
+  position: relative; width: 88px; height: 88px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 4px;
+}
+.art-circle {
+  position: absolute; border-radius: 50%; opacity: .18;
+}
+.art-c1 { width: 88px; height: 88px; background: var(--brand-purple); }
+.art-c2 { width: 60px; height: 60px; background: var(--brand-blue); }
+.art-c3 { width: 36px; height: 36px; background: var(--brand-red); }
+.art-icon { position: relative; color: var(--brand-purple); opacity: .8; }
+
+.hint-warn { font-size: .85rem; }
+.hint-warn a { color: var(--brand-purple); font-weight: 500; }
+
+/* ── Modal ───────────────────────────────────────────────────────────────────── */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 100;
-  background: rgba(0,0,0,.45);
+  background: rgba(15,15,20,.45);
+  backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
 }
 .modal {
-  background: var(--bg-surface);
-  border-radius: var(--radius-md);
+  background: var(--bg);
+  border-radius: var(--radius-lg);
   width: 100%; max-width: 460px;
-  box-shadow: 0 16px 48px rgba(0,0,0,.18);
+  box-shadow: var(--shadow-drop);
   display: flex; flex-direction: column;
+  border: 1px solid var(--border);
 }
 .modal-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 18px 20px 14px;
+  padding: 20px 22px 16px;
   border-bottom: 1px solid var(--border);
 }
-.modal-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.modal-title-wrap { display: flex; align-items: center; gap: 12px; }
+.modal-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: rgba(162,89,255,.1); color: var(--brand-purple);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-body   { padding: 22px; display: flex; flex-direction: column; gap: 18px; }
 .modal-footer {
   display: flex; justify-content: flex-end; gap: 10px;
-  padding: 14px 20px;
+  padding: 16px 22px;
   border-top: 1px solid var(--border);
 }
 
-/* ── Form fields ────────────────────────────────────────────────────────────── */
+/* ── Form ────────────────────────────────────────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: 6px; }
-.field-label {
-  font-size: 0.82rem; font-weight: 600; color: var(--txt-muted);
-}
+.field-label { font-size: .8rem; font-weight: 600; color: var(--text-muted); }
 .required { color: var(--clr-danger); }
-.optional  { color: var(--txt-muted); font-weight: 400; }
-.field-hint { font-size: 0.8rem; color: var(--txt-muted); }
+.optional  { color: var(--text-muted); font-weight: 400; }
+.field-hint { font-size: .8rem; color: var(--text-muted); }
 .field-hint.warn { color: var(--clr-warn); }
-.field-hint a { color: var(--clr-primary); }
+.field-hint a { color: var(--brand-purple); font-weight: 500; }
 
-.provider-grid {
-  display: flex; gap: 8px;
-}
+.provider-grid { display: flex; gap: 8px; }
 .provider-btn {
-  flex: 1; padding: 7px 10px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--bg-page); cursor: pointer;
-  font-size: 0.85rem; font-weight: 500; color: var(--txt-muted);
-  transition: all .15s;
+  flex: 1; padding: 9px 10px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-alt); cursor: pointer;
+  font-size: .84rem; font-weight: 500; color: var(--text-muted);
+  transition: all .15s; font-family: inherit;
 }
-.provider-btn:hover  { border-color: var(--clr-primary); color: var(--clr-primary); }
-.provider-btn.active { border-color: var(--clr-primary); background: #eff6ff; color: var(--clr-primary); font-weight: 600; }
+.provider-btn:hover { border-color: #c8c8d0; color: var(--text); background: var(--bg); }
 
 .error-msg {
-  padding: 8px 12px;
-  background: #fee2e2; color: #991b1b;
-  border-radius: var(--radius-sm); font-size: 0.85rem;
+  padding: 10px 14px;
+  background: rgba(242,78,30,.08); color: #b93200;
+  border-radius: var(--radius-sm); font-size: .84rem;
 }
 </style>

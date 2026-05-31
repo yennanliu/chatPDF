@@ -5,8 +5,12 @@ import PDFUploader from '@/components/PDFUploader.vue'
 <template>
   <div class="page">
     <div class="page-header">
-      <h1>Documents</h1>
-      <p>Upload PDFs to index them. Once indexed, add them to Libraries and start chatting.</p>
+      <div class="page-eyebrow">
+        <span class="eyebrow-dot" style="background:var(--brand-orange)" />
+        Upload
+      </div>
+      <h1>Your Documents</h1>
+      <p>Drop PDFs here to index them. Once indexed, add them to a Library and start chatting.</p>
     </div>
     <div class="page-body">
       <PDFUploader />
@@ -15,12 +19,24 @@ import PDFUploader from '@/components/PDFUploader.vue'
 </template>
 
 <style scoped>
-.page { padding: 32px; max-width: 820px; }
-.page-header { margin-bottom: 24px; }
-.page-header h1 { margin-bottom: 6px; }
-.page-body {}
+.page { padding: 40px 36px; max-width: 860px; }
+
+.page-header { margin-bottom: 32px; }
+
+.page-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: .75rem; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--brand-orange);
+  margin-bottom: 10px;
+}
+.eyebrow-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  display: inline-block;
+}
+
+.page-header h1 { margin-bottom: 8px; }
 
 @media (max-width: 768px) {
-  .page { padding: 16px; }
+  .page { padding: 20px 16px; }
 }
 </style>
