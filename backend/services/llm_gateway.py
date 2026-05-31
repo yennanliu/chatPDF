@@ -16,7 +16,7 @@ class LLMGateway:
         if provider == "openai":
             return ChatOpenAI(model=model, api_key=settings.openai_api_key, streaming=True)
         if provider == "google":
-            return ChatGoogleGenerativeAI(model=model, google_api_key=settings.google_api_key)
+            return ChatGoogleGenerativeAI(model=model, google_api_key=settings.resolved_google_api_key)
         if provider == "anthropic":
             return ChatAnthropic(model=model, api_key=settings.anthropic_api_key)
         raise ValueError(f"Unknown provider '{provider}'. Use openai | google | anthropic")
