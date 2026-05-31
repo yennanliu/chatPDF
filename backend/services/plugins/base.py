@@ -15,7 +15,7 @@ class BaseEmbedder(ABC):
 
 class BaseRetriever(ABC):
     @abstractmethod
-    def search(self, vec: list[float], top_k: int, doc_ids: list[str]) -> list[dict]: ...
+    def search(self, query: str, top_k: int, doc_ids: list[str]) -> list[dict]: ...
 
 
 class BaseReranker(ABC):

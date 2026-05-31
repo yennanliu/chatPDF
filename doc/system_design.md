@@ -403,23 +403,25 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 
 ### ── BACKEND ──────────────────────────────────────────
 
-### Phase 1 — BE Skeleton (Week 1)
-- [ ] `uv init backend` — add `pytest pytest-asyncio httpx` dev deps; wire `conftest.py`
-- [ ] **[TDD]** Test: `POST /api/documents/upload` returns 201 with `doc_id`
-- [ ] FastAPI scaffold: `main.py`, routers, SQLModel models, DB init
-- [ ] PDF upload endpoint + PyMuPDF text extraction + ChromaDB upsert
-- [ ] **[TDD]** Test: library CRUD (create, list, add doc, remove doc)
-- [ ] Library + Library–Document endpoints
+### Phase 1 — BE Skeleton ✅ DONE
+- [x] `uv init backend` — added `pytest pytest-asyncio httpx` dev deps; wired `conftest.py`
+- [x] **[TDD]** Test: `POST /api/documents/upload` returns 201 with `doc_id`
+- [x] FastAPI scaffold: `main.py`, routers, SQLModel models, DB init
+- [x] PDF upload endpoint + PyMuPDF text extraction + ChromaDB upsert
+- [x] **[TDD]** Test: library CRUD (create, list, add doc, remove doc)
+- [x] Library + Library–Document endpoints
+> **20 tests, 0.24s** — commit `4f3bf86`
 
-### Phase 2 — Core RAG + Chat BE (Week 2)
-- [ ] **[TDD]** Test: `RAGConfig` defaults and JSON round-trip
-- [ ] Plugin interfaces + `RecursiveChunker`, `LocalEmbedder`, `DenseRetriever`, `NoopReranker`
-- [ ] **[TDD]** Test: LangGraph pipeline returns non-empty answer for a seeded doc
-- [ ] LangGraph RAG pipeline wired to plugin registry + `RAGConfig`
-- [ ] **[TDD]** Test: WebSocket sends `token` frames then `done` frame
-- [ ] WebSocket endpoint + streaming token handler
-- [ ] **[TDD]** Test: session reload reconstructs full message history
-- [ ] Session CRUD + message persistence
+### Phase 2 — Core RAG + Chat BE ✅ DONE
+- [x] **[TDD]** Test: `RAGConfig` defaults and JSON round-trip
+- [x] Plugin interfaces + `RecursiveChunker`, `LocalEmbedder`, `DenseRetriever`, `NoopReranker`
+- [x] **[TDD]** Test: LangGraph pipeline returns non-empty answer for a seeded doc
+- [x] LangGraph RAG pipeline wired to plugin registry + `RAGConfig`
+- [x] **[TDD]** Test: WebSocket sends `token` frames then `done` frame
+- [x] WebSocket endpoint + streaming token handler
+- [x] **[TDD]** Test: session reload reconstructs full message history
+- [x] Session CRUD + message persistence
+> **49 tests, 0.52s** — `FakeLLMGateway` keeps WS tests offline
 
 ### Phase 3 — Multi-LLM + RAG Variants (Week 3)
 - [ ] **[TDD]** Test: `LLMGateway.get_llm` returns correct adapter per provider
