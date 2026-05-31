@@ -7,6 +7,8 @@ DON'T implement any code, just offer a system design doc (saving in prompt dir) 
 1. FE + BE app
 2. FE: vue 3
 3. BE: fast api + LLM (gpt, gemini, claude ...) + SQLITE + RAG db
+	- use `uv` as python pkg manager
+	- use .env save API keys
 4. the system needs to be able to load multiple pdf, transform the
    PDF data into RAG (use local DB, the simple one), and answer the questions based on the knowledge base
 
