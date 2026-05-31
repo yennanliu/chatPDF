@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ChatPDF — WebSocket Smoke Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 24px; }
+    h1 { font-size: 1.2rem; margin-bottom: 16px; color: #333; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    label { display: block; font-size: 0.85rem; color: #555; margin-bottom: 4px; }
+    input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    button { margin-top: 8px; padding: 8px 16px; background: #2563eb; color: #fff;
+             border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    button:disabled { background: #93c5fd; cursor: default; }
+    button.danger { background: #dc2626; }
+    #log { font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all;
+           max-height: 400px; overflow-y: auto; background: #111; color: #0f0; padding: 12px;
+           border-radius: 4px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+             font-size: 0.75rem; font-weight: 600; }
+    .badge.connected { background: #dcfce7; color: #166534; }
+    .badge.disconnected { background: #fee2e2; color: #991b1b; }
+    .sources { margin-top: 8px; padding: 8px; background: #f0f9ff; border-radius: 4px;
+               font-size: 0.8rem; color: #0369a1; }
+  </style>
+</head>
+<body>
+  <h1>ChatPDF — WebSocket Smoke Test</h1>
+
+  <div class="card">
+    <label>Server base URL</label>
+    <input id="baseUrl" value="ws://localhost:8000" />
+
+    <label style="margin-top:12px">Session ID</label>
+    <div class="row">
+      <input id="sessionId" placeholder="paste session_id here" style="flex:1" />
+    </div>
+
+    <div class="row" style="margin-top:8px; align-items:center;">
+      <button id="connectBtn" onclick="connect()">Connect</button>
+      <button id="disconnectBtn" class="danger" onclick="disconnect()" disabled>Disconnect</button>
+      <span id="statusBadge" class="badge disconnected">disconnected</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Query</label>
+    <textarea id="query" rows="3" placeholder="Ask a question about your documents..."></textarea>
+    <button id="sendBtn" onclick="send()" disabled>Send</button>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <label style="margin:0">Log</label>
+      <button onclick="clearLog()" style="padding:4px 10px; font-size:0.75rem; margin:0;">Clear</button>
+    </div>
+    <div id="log"></div>
+    <div id="sources" class="sources" style="display:none"></div>
+  </div>
+
+  <script>
+    let ws = null;
+    let currentAnswer = '';
+
+    function log(msg, color) {
+      const el = document.getElementById('log');
+      const line = document.createElement('span');
+      line.style.color = color || '#0f0';
+      line.textContent = msg + '\n';
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+      document.getElementById('sources').style.display = 'none';
+    }
+
+    function connect() {
+      const base = document.getElementById('baseUrl').value.trim();
+      const sid = document.getElementById('sessionId').value.trim();
+      if (!sid) { alert('Enter a session_id first'); return; }
+
+      const url = `${base}/ws/chat/${sid}`;
+      log(`→ Connecting to ${url}`, '#aaa');
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        log('✓ Connected', '#0f0');
+        setConnected(true);
+      };
+
+      ws.onmessage = (evt) => {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'token') {
+          process.stdout && process.stdout.write(msg.data);
+          currentAnswer += msg.data;
+          // Update last line in log with accumulated answer
+          updateAnswer(currentAnswer);
+        } else if (msg.type === 'done') {
+          log('\n✓ done', '#0f0');
+          if (msg.sources && msg.sources.length > 0) {
+            showSources(msg.sources);
+          }
+          currentAnswer = '';
+          document.getElementById('sendBtn').disabled = false;
+        } else if (msg.type === 'error') {
+          log(`✗ error: ${msg.detail}`, '#f44');
+          currentAnswer = '';
+          document.getElementById('sendBtn').disabled = false;
+        } else {
+          log(JSON.stringify(msg), '#ff0');
+        }
+      };
+
+      ws.onerror = (err) => {
+        log(`✗ WebSocket error`, '#f44');
+      };
+
+      ws.onclose = (evt) => {
+        log(`→ Closed (code=${evt.code})`, '#aaa');
+        setConnected(false);
+      };
+    }
+
+    let answerEl = null;
+
+    function updateAnswer(text) {
+      if (!answerEl) {
+        const el = document.getElementById('log');
+        answerEl = document.createElement('span');
+        answerEl.style.color = '#7dd3fc';
+        el.appendChild(answerEl);
+      }
+      answerEl.textContent = text;
+      document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+    }
+
+    function send() {
+      const query = document.getElementById('query').value.trim();
+      if (!query || !ws || ws.readyState !== WebSocket.OPEN) return;
+      answerEl = null;
+      log(`\n← query: ${query}`, '#fbbf24');
+      document.getElementById('sendBtn').disabled = true;
+      ws.send(JSON.stringify({ query }));
+    }
+
+    function disconnect() {
+      if (ws) { ws.close(); ws = null; }
+    }
+
+    function showSources(sources) {
+      const el = document.getElementById('sources');
+      el.style.display = 'block';
+      el.innerHTML = '<strong>Sources:</strong><br>' +
+        sources.map((s, i) =>
+          `${i + 1}. <b>${s.doc_name}</b> (score: ${s.score})<br>` +
+          `   <em>${s.chunk_preview.substring(0, 120)}…</em>`
+        ).join('<br>');
+    }
+
+    function setConnected(connected) {
+      document.getElementById('connectBtn').disabled = connected;
+      document.getElementById('disconnectBtn').disabled = !connected;
+      document.getElementById('sendBtn').disabled = !connected;
+      const badge = document.getElementById('statusBadge');
+      badge.textContent = connected ? 'connected' : 'disconnected';
+      badge.className = 'badge ' + (connected ? 'connected' : 'disconnected');
+    }
+
+    // Allow Ctrl+Enter to send
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) send();
+    });
+  </script>
+</body>
+</html>

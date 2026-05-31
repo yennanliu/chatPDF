@@ -7,9 +7,12 @@ Contract under test:
   - from_json handles empty / partial JSON
   - Plugin builders return the right concrete types
 """
-from services.rag_config import RAGConfig, build_chunker, build_reranker
+from unittest.mock import MagicMock
+
+from services.rag_config import RAGConfig, build_chunker, build_reranker, build_retriever
 from services.plugins.chunkers import RecursiveChunker, SentenceChunker
 from services.plugins.rerankers import NoopReranker
+from services.plugins.retrievers import DenseRetriever, HybridRetriever
 
 
 # ── RAGConfig ─────────────────────────────────────────────────────────────────
@@ -94,6 +97,20 @@ def test_recursive_chunker_ignores_blank_chunks():
     chunker = RecursiveChunker(chunk_size=10, chunk_overlap=0)
     chunks = chunker.split("   ")
     assert chunks == []
+
+
+# ── build_retriever ───────────────────────────────────────────────────────────
+
+def test_build_retriever_returns_dense():
+    vs = MagicMock()
+    r = build_retriever(RAGConfig(retriever="dense"), vs)
+    assert isinstance(r, DenseRetriever)
+
+
+def test_build_retriever_returns_hybrid():
+    vs = MagicMock()
+    r = build_retriever(RAGConfig(retriever="hybrid"), vs)
+    assert isinstance(r, HybridRetriever)
 
 
 # ── NoopReranker ─────────────────────────────────────────────────────────────

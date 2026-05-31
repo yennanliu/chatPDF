@@ -20,8 +20,8 @@ async def test_upload_returns_201_with_doc_id(client, sample_pdf):
     data = response.json()
     assert "doc_id" in data
     assert data["name"] == "sample.pdf"
-    assert data["status"] == "indexed"
-    assert data["page_count"] == 1
+    assert data["status"] == "pending"  # ingestion runs in background
+    assert data["page_count"] == 1      # page count from sync pre-scan
 
 
 async def test_upload_persists_to_list(client, sample_pdf):
@@ -71,6 +71,39 @@ async def test_upload_multiple_documents(client, sample_pdf):
 
     resp = await client.get("/api/documents")
     assert len(resp.json()) == 3
+
+
+# ── Phase 4: BackgroundTasks upload + status polling ─────────────────────────
+
+async def test_status_endpoint_returns_indexed_after_upload(client, sample_pdf):
+    """After upload, background ingestion runs → status endpoint shows 'indexed'."""
+    resp = await client.post(
+        "/api/documents/upload",
+        files={"file": ("status_test.pdf", sample_pdf, "application/pdf")},
+    )
+    doc_id = resp.json()["doc_id"]
+
+    # ASGITransport runs background tasks before returning — already indexed
+    status_resp = await client.get(f"/api/documents/{doc_id}/status")
+    assert status_resp.status_code == 200
+    body = status_resp.json()
+    assert body["doc_id"] == doc_id
+    assert body["status"] == "indexed"
+    assert body["page_count"] == 1
+
+
+async def test_status_endpoint_404_for_unknown(client):
+    resp = await client.get("/api/documents/no-such-doc/status")
+    assert resp.status_code == 404
+
+
+async def test_upload_initial_response_is_pending(client, sample_pdf):
+    """The POST response body always says 'pending' — client must poll for completion."""
+    resp = await client.post(
+        "/api/documents/upload",
+        files={"file": ("pending_test.pdf", sample_pdf, "application/pdf")},
+    )
+    assert resp.json()["status"] == "pending"
 
 
 # ── delete cascade tests (Phase 3) ───────────────────────────────────────────

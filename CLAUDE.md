@@ -91,7 +91,7 @@ Always commit both `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 | `backend/services/ingestion.py` | PDF → chunks → ChromaDB |
 | `backend/services/chat_history.py` | SQLite message read/write |
 | `backend/services/plugins/` | Chunker / Embedder / Retriever / Reranker plugins |
-| `backend/routers/documents.py` | `POST /api/documents/upload`, `GET`, `DELETE` |
+| `backend/routers/documents.py` | `POST /api/documents/upload` (BackgroundTasks), `GET`, `GET /{id}/status`, `DELETE` |
 | `backend/routers/libraries.py` | Library CRUD + document membership |
 | `backend/routers/sessions.py` | Session CRUD |
 | `backend/routers/chat_ws.py` | `WS /ws/chat/{session_id}` — streaming chat |
@@ -151,10 +151,10 @@ No changes to LangGraph or router code needed.
 
 ## Current status
 
-| Phase | Status | Tests |
-|---|---|---|
-| 1 — BE Skeleton | ✅ Done | 20 |
-| 2 — Core RAG + Chat BE | ✅ Done | 49 |
-| 3 — Multi-LLM + RAG Variants | ✅ Done | 67 |
-| 4 — BE Validation Gate | ⬜ Next | — |
-| 5–7 — Frontend | ⬜ | — |
+| Phase | Status | Tests | Coverage |
+|---|---|---|---|
+| 1 — BE Skeleton | ✅ Done | 20 | — |
+| 2 — Core RAG + Chat BE | ✅ Done | 49 | — |
+| 3 — Multi-LLM + RAG Variants | ✅ Done | 67 | — |
+| 4 — BE Validation Gate | ✅ Done | 93 | 100% services |
+| 5–7 — Frontend | ⬜ Next | — | — |

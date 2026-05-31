@@ -78,3 +78,38 @@ def test_model_name_forwarded(provider, model, cls_attr):
 def test_get_llm_gateway_returns_instance():
     from services.llm_gateway import get_llm_gateway
     assert isinstance(get_llm_gateway(), LLMGateway)
+
+
+# ── stream (lines 25-27) ──────────────────────────────────────────────────────
+
+async def test_stream_yields_non_empty_content():
+    """LLMGateway.stream yields token strings and filters empty chunks."""
+    from langchain_core.messages import AIMessageChunk
+
+    async def _fake_astream(messages, *a, **kw):
+        for content in ("hello ", "world", ""):
+            yield AIMessageChunk(content=content)
+
+    mock_llm = MagicMock()
+    mock_llm.astream = _fake_astream
+
+    gw = LLMGateway()
+    tokens = []
+    async for tok in gw.stream(mock_llm, []):
+        tokens.append(tok)
+
+    assert tokens == ["hello ", "world"]
+
+
+async def test_stream_empty_response_yields_nothing():
+    from langchain_core.messages import AIMessageChunk
+
+    async def _fake_astream(messages, *a, **kw):
+        yield AIMessageChunk(content="")
+
+    mock_llm = MagicMock()
+    mock_llm.astream = _fake_astream
+
+    gw = LLMGateway()
+    tokens = [tok async for tok in gw.stream(mock_llm, [])]
+    assert tokens == []
