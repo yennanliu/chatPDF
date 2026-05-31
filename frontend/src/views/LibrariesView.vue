@@ -170,6 +170,12 @@ async function remove(id: string) {
   align-items: start;
 }
 
+@media (max-width: 768px) {
+  .page { padding: 16px; }
+  .split { grid-template-columns: 1fr; }
+  .detail-panel { min-height: unset; }
+}
+
 /* ── Library panel ─────────────────────────────────────────────────────────── */
 .lib-panel {
   background: var(--bg-surface);

@@ -9,7 +9,7 @@ const props = defineProps<{ sessionId: string }>()
 const sessionsStore = useSessionsStore()
 const sidRef        = toRef(props, 'sessionId')
 
-const { messages, isStreaming, wsState, wsError, send, loadHistory } = useChatSocket(sidRef)
+const { messages, isStreaming, wsState, wsError, send, loadHistory, reconnect } = useChatSocket(sidRef)
 
 const query     = ref('')
 const listEl    = ref<HTMLElement | null>(null)
@@ -70,6 +70,12 @@ const statusLabel = computed(() => {
   if (isStreaming.value)              return 'responding…'
   return ''
 })
+
+// Show the reconnect banner when the connection is unexpectedly lost
+// (not 'idle' which is the initial/unmounted state)
+const showReconnectBanner = computed(() =>
+  wsState.value === 'error' || (wsState.value === 'closed' && messages.value.length > 0),
+)
 </script>
 
 <template>
@@ -89,6 +95,16 @@ const statusLabel = computed(() => {
           {{ currentSession.provider }} · {{ currentSession.model }}
         </span>
       </div>
+    </div>
+
+    <!-- ── WS error / reconnect banner ───────────────────────────────────── -->
+    <div v-if="showReconnectBanner" class="reconnect-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <span>Connection lost{{ wsError ? `: ${wsError}` : '' }}</span>
+      <button class="btn btn-sm btn-primary" @click="reconnect">Reconnect</button>
     </div>
 
     <!-- ── Message list ────────────────────────────────────────────────────── -->
@@ -141,6 +157,16 @@ const statusLabel = computed(() => {
   height: 100%;
   min-height: 0;
 }
+
+/* ── Reconnect banner ───────────────────────────────────────────────────────── */
+.reconnect-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  background: #fef3c7; border-bottom: 1px solid #fcd34d;
+  font-size: 0.82rem; color: #92400e;
+  flex-shrink: 0;
+}
+.reconnect-banner span { flex: 1; }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
 .chat-header {

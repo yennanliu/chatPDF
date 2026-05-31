@@ -156,5 +156,10 @@ export function useChatSocket(sessionId: Ref<string | null>) {
 
   onUnmounted(_teardown)
 
-  return { messages, isStreaming, wsState, wsError, send, loadHistory, clearMessages }
+  function reconnect() {
+    const sid = sessionId.value
+    if (sid) _connect(sid)
+  }
+
+  return { messages, isStreaming, wsState, wsError, send, loadHistory, clearMessages, reconnect }
 }

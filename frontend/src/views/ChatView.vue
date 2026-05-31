@@ -10,8 +10,9 @@ const router        = useRouter()
 const sessStore     = useSessionsStore()
 const libStore      = useLibrariesStore()
 
-const activeSessionId = ref<string | null>(null)
-const showModal       = ref(false)
+const activeSessionId  = ref<string | null>(null)
+const showModal        = ref(false)
+const sessionDrawerOpen = ref(false)  // mobile session panel toggle
 
 // ── Create-session modal state ────────────────────────────────────────────────
 const form = ref({
@@ -45,12 +46,13 @@ async function createSession() {
   createError.value = null
   try {
     const sess = await sessStore.createSession({
-      library_id: form.value.library_id,
-      provider:   form.value.provider,
-      model:      form.value.model,
+      library_id:  form.value.library_id,
+      provider:    form.value.provider,
+      model:       form.value.model,
       title:      form.value.title.trim() || undefined,
     })
     showModal.value = false
+    sessionDrawerOpen.value = false
     activeSessionId.value = sess.session_id
   } catch (e) {
     createError.value = e instanceof Error ? e.message : String(e)
@@ -73,15 +75,37 @@ onMounted(async () => {
 
 <template>
   <div class="chat-layout">
-    <!-- ── Session sidebar ─────────────────────────────────────────────────── -->
-    <SessionSidebar
-      :active-session-id="activeSessionId"
-      @select="(id) => (activeSessionId = id)"
-      @new-session="openModal"
+    <!-- ── Mobile drawer backdrop ────────────────────────────────────────── -->
+    <div
+      v-if="sessionDrawerOpen"
+      class="drawer-backdrop"
+      @click="sessionDrawerOpen = false"
     />
+
+    <!-- ── Session sidebar ─────────────────────────────────────────────────── -->
+    <div class="session-panel" :class="{ 'drawer-open': sessionDrawerOpen }">
+      <SessionSidebar
+        :active-session-id="activeSessionId"
+        @select="(id) => { activeSessionId = id; sessionDrawerOpen = false }"
+        @new-session="openModal"
+      />
+    </div>
 
     <!-- ── Chat window or placeholder ────────────────────────────────────── -->
     <div class="chat-area">
+      <!-- Mobile sessions toggle button -->
+      <button
+        class="mobile-sessions-btn btn btn-ghost btn-sm"
+        @click="sessionDrawerOpen = true"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+        Sessions
+      </button>
+
       <ChatWindow v-if="activeSessionId" :session-id="activeSessionId" />
       <div v-else class="no-session">
         <div class="no-session-icon">💬</div>
@@ -190,12 +214,46 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+.session-panel { display: flex; flex-shrink: 0; }
+
 .chat-area {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-page);
+  position: relative;
+}
+
+.mobile-sessions-btn { display: none; }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .chat-layout { height: calc(100vh - 52px); }
+
+  /* Session panel becomes a slide-in drawer */
+  .session-panel {
+    position: fixed; top: 52px; left: 0; bottom: 0;
+    z-index: 55;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+  }
+  .session-panel.drawer-open { transform: translateX(0); }
+
+  .drawer-backdrop {
+    position: fixed; inset: 0; top: 52px;
+    z-index: 50;
+    background: rgba(0,0,0,.4);
+  }
+
+  /* "Sessions" toggle button visible on mobile */
+  .mobile-sessions-btn {
+    display: flex;
+    position: absolute; top: 8px; left: 8px; z-index: 10;
+    gap: 6px; background: var(--bg-surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
 }
 
 /* ── Empty state ─────────────────────────────────────────────────────────────── */

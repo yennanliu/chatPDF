@@ -471,11 +471,11 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 - [x] Session create modal — library dropdown, provider toggle (OpenAI/Google/Anthropic), model selector per provider, optional title; auto-selects most-recent session on page load
 - [x] `npm run build` passes (TypeScript + Vite, 134 kB)
 
-### Phase 7 — Integration Polish (Week 7)
-- [ ] End-to-end test: upload → library → session → chat → reload
-- [ ] Error states: failed indexing, LLM timeout, WS disconnect
-- [ ] Upload progress indicator wired to polling endpoint
-- [ ] Basic responsive layout
+### Phase 7 — Integration Polish ✅ DONE
+- [x] **E2E tests** (`tests/integration/test_e2e_flow.py`) — 5 new tests: full happy path (upload→index→library→session→2 chat turns→history reload→rename), status polling transition, WS error on unknown session, empty-library chat, cascade delete; total **98 tests**, 0.73 s
+- [x] **Error states** — WS disconnect: amber reconnect banner in `ChatWindow.vue` with one-click reconnect; upload failure: "uploading" vs "indexing" phases differentiated; LLM/backend errors surface as error frames in chat bubble
+- [x] **Upload progress** — three visible phases: `uploading` badge (POST in-flight) → `indexing` badge + spinner (pending, polling at 1.5 s) → `indexed` green badge; "pending" relabelled "indexing" in the display layer
+- [x] **Responsive layout** — `App.vue`: hamburger toggle slides in the nav drawer on mobile (≤ 768 px); `ChatView.vue`: session panel becomes a slide-in drawer with "Sessions" CTA button; `LibrariesView.vue`: two-panel grid collapses to single column; `DocumentsView.vue`: padding reduced on mobile; `npm run build` passes (137 kB)
 
 ---
 

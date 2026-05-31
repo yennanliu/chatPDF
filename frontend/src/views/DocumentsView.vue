@@ -19,4 +19,8 @@ import PDFUploader from '@/components/PDFUploader.vue'
 .page-header { margin-bottom: 24px; }
 .page-header h1 { margin-bottom: 6px; }
 .page-body {}
+
+@media (max-width: 768px) {
+  .page { padding: 16px; }
+}
 </style>
