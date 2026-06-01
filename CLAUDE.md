@@ -1,8 +1,8 @@
-# ChatPDF — Project Guide
+# ChatPDF
 
-RAG-powered multi-PDF chat app. Upload PDFs into named Libraries, then chat against them with streaming LLM responses. Persistent sessions with full history reload.
+RAG-powered multi-PDF chat app. Upload PDFs into named Libraries, chat against them with streaming LLM responses.
 
-Full system design: [`doc/system_design.md`](doc/system_design.md)
+Design doc: [`doc/system_design.md`](doc/system_design.md) | Extension guide: [`doc/extending.md`](doc/extending.md)
 
 ---
 
@@ -11,68 +11,51 @@ Full system design: [`doc/system_design.md`](doc/system_design.md)
 ```
 chatpdf/
 ├── backend/     FastAPI app — primary focus (built first, TDD)
-├── frontend/    Vue 3 SPA — added after BE validation gate (Phase 5+)
+├── frontend/    Vue 3 SPA
 └── doc/         Design documents
 ```
-
----
 
 ## Backend quick start
 
 ```bash
 cd backend
-
-# install deps (first time or after pulling)
-uv sync
-
-# copy env template and add your API keys
-cp .env.example .env
-
-# run dev server  →  http://localhost:8000
-uv run uvicorn main:app --reload
-
-# Swagger UI  →  http://localhost:8000/docs
-# ReDoc       →  http://localhost:8000/redoc
+uv sync                                    # install deps
+cp .env.example .env                       # add API keys
+uv run uvicorn main:app --reload           # http://localhost:8000
 ```
 
----
+Swagger UI → `http://localhost:8000/docs`
 
 ## Running tests
 
 ```bash
 cd backend
-
 uv run pytest                              # all tests
 uv run pytest tests/unit/                 # unit only (fast, no I/O)
 uv run pytest tests/integration/          # integration (httpx + starlette)
-uv run pytest --cov=services --cov-report=term-missing   # with coverage
+uv run pytest --cov=services --cov-report=term-missing
 ```
 
-Tests run in **0.5 s** — no API keys, no model downloads. The `FakeLLMGateway` and `_FakeEF` in `tests/conftest.py` replace real LLM and embedding calls.
+Tests run in ~0.5 s — no API keys needed. `FakeLLMGateway` and `_FakeEF` in `tests/conftest.py` stub real calls.
 
 ---
 
 ## Development conventions
 
-### TDD — mandatory for backend
-Every feature follows: **write failing test → implement → green → refactor**.
-Tests live in `backend/tests/`, mirroring the source structure:
+**TDD — mandatory for backend.** Write failing test → implement → green → refactor.
 - `tests/unit/` — pure logic, no I/O
 - `tests/integration/` — real SQLite + httpx/starlette test client
 
-### Build order
-```
-Backend (Phases 1–3) → Validation gate (Phase 4) → Frontend (Phases 5–7)
-```
-Never start FE work until all BE tests are green and Swagger smoke-tests pass.
+**Build order:** Backend (Phases 1–3) → Validation gate (Phase 4) → Frontend (Phases 5–7).
+Never start FE work until all BE tests pass.
 
-### Dependency management — `uv`
+**Deps (`uv`):**
 ```bash
-uv add <package>          # add runtime dep
-uv add --dev <package>    # add dev dep
-uv sync                   # install after git pull
+uv add <package>          # runtime
+uv add --dev <package>    # dev
+uv sync                   # after git pull
 ```
-Always commit both `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
+Always commit `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 
 ---
 
@@ -91,7 +74,7 @@ Always commit both `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 | `backend/services/ingestion.py` | PDF → chunks → ChromaDB |
 | `backend/services/chat_history.py` | SQLite message read/write |
 | `backend/services/plugins/` | Chunker / Embedder / Retriever / Reranker plugins |
-| `backend/routers/documents.py` | `POST /api/documents/upload` (BackgroundTasks), `GET`, `GET /{id}/status`, `DELETE` |
+| `backend/routers/documents.py` | `POST /api/documents/upload`, `GET`, `GET /{id}/status`, `DELETE` |
 | `backend/routers/libraries.py` | Library CRUD + document membership |
 | `backend/routers/sessions.py` | Session CRUD |
 | `backend/routers/chat_ws.py` | `WS /ws/chat/{session_id}` — streaming chat |
@@ -99,64 +82,44 @@ Always commit both `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 
 ---
 
-## Environment variables (`.env`)
+## Environment variables
 
 ```bash
-# LLM — add only keys for providers you use
 OPENAI_API_KEY=
 GOOGLE_API_KEY=
 ANTHROPIC_API_KEY=
 
-EMBEDDING_BACKEND=local     # local (default, free) | openai
+EMBEDDING_BACKEND=local     # local (default) | openai
 
 CHROMA_DATA_DIR=../chroma_data
 UPLOAD_DIR=../uploads
 SQLITE_URL=sqlite:///../chatpdf.db
 ```
 
----
-
 ## WebSocket protocol
 
 ```
-# Client sends one message per turn:
+# Client → one message per turn:
 { "query": "What does the paper say about X?" }
 
 # Server streams:
-{ "type": "token", "data": "The" }        ← repeated per token
-{ "type": "done",  "sources": [...] }     ← final frame, includes citations
-{ "type": "error", "detail": "..." }      ← on failure
+{ "type": "token",  "data": "The" }       ← repeated per token
+{ "type": "done",   "sources": [...] }    ← final frame with citations
+{ "type": "error",  "detail": "..." }     ← on failure
 ```
 
-Session (`session_id` in URL) holds `library_id`, `provider`, `model` — the client only sends the query.
-
----
-
-## Adding a new LLM provider
-
-1. Add the LangChain package: `uv add langchain-<provider>`
-2. Add a branch in `services/llm_gateway.py → LLMGateway.get_llm`
-3. Add the API key to `config.py` + `.env.example`
-4. Write a test in `tests/unit/` mocking the new provider
-
-## Adding a new RAG plugin (chunker / retriever / reranker)
-
-1. Create a subclass of `BaseChunker` / `BaseRetriever` / `BaseReranker` in the relevant `services/plugins/` file
-2. Register it in `services/rag_config.py` in the appropriate `_*_registry()` function
-3. Write a unit test in `tests/unit/test_rag_config.py`
-
-No changes to LangGraph or router code needed.
+Session (`session_id` in URL) carries `library_id`, `provider`, `model` — client only sends the query.
 
 ---
 
 ## Current status
 
-| Phase | Status | Tests | Coverage |
-|---|---|---|---|
-| 1 — BE Skeleton | ✅ Done | 20 | — |
-| 2 — Core RAG + Chat BE | ✅ Done | 49 | — |
-| 3 — Multi-LLM + RAG Variants | ✅ Done | 67 | — |
-| 4 — BE Validation Gate | ✅ Done | 93 | 100% services |
-| 5 — FE Skeleton | ✅ Done | — | build ✓ |
-| 6 — Chat UI | ✅ Done | — | build ✓ |
-| 7 — Integration Polish | ✅ Done | 98 | build ✓ |
+| Phase | Status | Tests |
+|---|---|---|
+| 1 — BE Skeleton | ✅ Done | 20 |
+| 2 — Core RAG + Chat BE | ✅ Done | 49 |
+| 3 — Multi-LLM + RAG Variants | ✅ Done | 67 |
+| 4 — BE Validation Gate | ✅ Done | 93 (100% service coverage) |
+| 5 — FE Skeleton | ✅ Done | build ✓ |
+| 6 — Chat UI | ✅ Done | build ✓ |
+| 7 — Integration Polish | ✅ Done | 98, build ✓ |
