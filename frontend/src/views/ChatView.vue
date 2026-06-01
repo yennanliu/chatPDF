@@ -33,10 +33,6 @@ const PROVIDER_META: Record<string, { label: string; color: string; bg: string }
   anthropic: { label: 'Anthropic', color: '#a259ff', bg: 'rgba(162,89,255,.1)' },
 }
 
-function onProviderChange() {
-  form.value.model = MODELS[form.value.provider][0]
-}
-
 function openModal() {
   createError.value = null
   form.value = { library_id: libStore.libraries[0]?.library_id ?? '', provider: 'openai', model: 'gpt-4o', title: '' }
@@ -167,7 +163,7 @@ onMounted(async () => {
                   class="provider-btn"
                   :class="{ active: form.provider === p }"
                   :style="form.provider === p ? { background: PROVIDER_META[p].bg, color: PROVIDER_META[p].color, borderColor: PROVIDER_META[p].color } : {}"
-                  @click="form.provider = p as typeof form.provider; onProviderChange()"
+                  @click="form.provider = p as typeof form.provider; form.model = MODELS[p][0]"
                 >
                   {{ PROVIDER_META[p].label }}
                 </button>

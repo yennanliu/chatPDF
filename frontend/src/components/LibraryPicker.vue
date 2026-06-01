@@ -12,8 +12,10 @@ onMounted(() => docStore.fetchDocuments())
 
 const library       = computed(() => libStore.libraries.find(l => l.library_id === props.libraryId))
 const inLibrary     = computed(() => library.value?.documents ?? [])
-const inLibraryIds  = computed(() => new Set(inLibrary.value.map(d => d.doc_id)))
-const available     = computed(() => docStore.documents.filter(d => !inLibraryIds.value.has(d.doc_id)))
+const available = computed(() => {
+  const ids = new Set(inLibrary.value.map(d => d.doc_id))
+  return docStore.documents.filter(d => !ids.has(d.doc_id))
+})
 
 async function add(doc_id: string)    { await libStore.addDocument(props.libraryId, doc_id) }
 async function remove(doc_id: string) { await libStore.removeDocument(props.libraryId, doc_id) }

@@ -109,7 +109,7 @@ export function useChatSocket(sessionId: Ref<string | null>) {
   // ── Dispatch a query frame ────────────────────────────────────────────────
 
   function _dispatch(query: string) {
-    const uid = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
+    const uid = crypto.randomUUID()
     messages.value.push({ id: `${uid}_u`, role: 'user',      content: query, sources: null, isStreaming: false })
     messages.value.push({ id: `${uid}_a`, role: 'assistant', content: '',    sources: null, isStreaming: true  })
     isStreaming.value = true
@@ -142,10 +142,6 @@ export function useChatSocket(sessionId: Ref<string | null>) {
     }))
   }
 
-  function clearMessages() {
-    messages.value = []
-  }
-
   // Reconnect whenever the sessionId changes
   watch(sessionId, (sid) => {
     messages.value = []
@@ -161,5 +157,5 @@ export function useChatSocket(sessionId: Ref<string | null>) {
     if (sid) _connect(sid)
   }
 
-  return { messages, isStreaming, wsState, wsError, send, loadHistory, clearMessages, reconnect }
+  return { messages, isStreaming, wsState, wsError, send, loadHistory, reconnect }
 }

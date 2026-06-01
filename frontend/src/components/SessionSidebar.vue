@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useSessionsStore } from '@/stores/sessions'
 
 defineProps<{ activeSessionId: string | null }>()
@@ -12,8 +12,6 @@ const emit = defineEmits<{
 const store     = useSessionsStore()
 const editingId = ref<string | null>(null)
 const editTitle = ref('')
-
-onMounted(() => store.fetchSessions())
 
 function formatDate(iso: string) {
   const d   = new Date(iso)

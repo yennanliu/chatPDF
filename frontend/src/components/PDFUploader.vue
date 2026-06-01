@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, triggerRef } from 'vue'
 import { useDocumentsStore, type Document } from '@/stores/documents'
 
 const store      = useDocumentsStore()
@@ -15,11 +15,6 @@ const displayDocs = computed<Array<Document | { _uploading: true; name: string }
   return [...uploading, ...store.documents]
 })
 
-function statusLabel(doc: Document): string {
-  if (doc.status === 'pending') return 'indexing…'
-  return doc.status
-}
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
@@ -32,9 +27,11 @@ async function handleFiles(files: FileList | null) {
       store.error = `"${file.name}" is not a PDF — only .pdf files are accepted`
       continue
     }
-    uploadingNames.value = new Set([...uploadingNames.value, file.name])
+    uploadingNames.value.add(file.name)
+    triggerRef(uploadingNames)
     await store.uploadDocument(file)
-    uploadingNames.value = new Set([...uploadingNames.value].filter(n => n !== file.name))
+    uploadingNames.value.delete(file.name)
+    triggerRef(uploadingNames)
   }
 }
 
@@ -43,7 +40,6 @@ function onDrop(e: DragEvent) {
   handleFiles(e.dataTransfer?.files ?? null)
 }
 
-function isUploading(name: string) { return uploadingNames.value.has(name) }
 </script>
 
 <template>
@@ -145,12 +141,12 @@ function isUploading(name: string) { return uploadingNames.value.has(name) }
           <div class="doc-actions">
             <span :class="['badge', `badge-${(entry as Document).status}`]">
               <span v-if="(entry as Document).status === 'pending'" class="spinner" style="width:9px;height:9px;margin-right:5px" />
-              {{ statusLabel(entry as Document) }}
+              {{ (entry as Document).status === 'pending' ? 'indexing…' : (entry as Document).status }}
             </span>
             <button
               class="btn btn-sm btn-ghost btn-icon"
               title="Delete document"
-              :disabled="isUploading((entry as Document).name)"
+              :disabled="uploadingNames.value.has((entry as Document).name)"
               style="color:var(--clr-danger)"
               @click="store.deleteDocument((entry as Document).doc_id)"
             >

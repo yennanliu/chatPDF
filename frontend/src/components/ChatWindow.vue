@@ -16,9 +16,7 @@ const listEl  = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
 const loading = ref(false)
 
-const currentSession = computed(() =>
-  sessionsStore.sessions.find(s => s.session_id === props.sessionId),
-)
+const currentSession = computed(() => sessionsStore.activeSession)
 
 watch(
   () => props.sessionId,
@@ -41,7 +39,7 @@ watch(
   { immediate: true },
 )
 
-watch(messages, () => nextTick(scrollBottom), { deep: true })
+watch(() => messages.value.length, () => nextTick(scrollBottom))
 
 function scrollBottom() {
   if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight
