@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import AsyncIterator, TypedDict, Union
+from typing import AsyncIterator, Union
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langgraph.graph import END, StateGraph
 
-from services.rag_config import RAGConfig, build_reranker
+from services.rag_config import RAGConfig, build_reranker, build_retriever
 from vector_store import VectorStore
 
 _SYSTEM = (
@@ -14,24 +13,6 @@ _SYSTEM = (
     "context from PDF documents. If the context is insufficient, say so clearly.\n\n"
     "Context:\n{context}"
 )
-
-
-class _State(TypedDict):
-    query: str
-    doc_ids: list[str]
-    top_k: int
-    context: list[dict]
-
-
-def _make_graph(vs: VectorStore):
-    def retrieve(state: _State) -> dict:
-        return {"context": vs.query(state["doc_ids"], state["query"], state["top_k"])}
-
-    g: StateGraph = StateGraph(_State)
-    g.add_node("retrieve", retrieve)
-    g.set_entry_point("retrieve")
-    g.add_edge("retrieve", END)
-    return g.compile()
 
 
 def _build_messages(query: str, context: list[dict], history: list[BaseMessage]) -> list[BaseMessage]:
@@ -47,20 +28,12 @@ async def run_rag_stream(
     vs: VectorStore,
     llm: BaseChatModel,
 ) -> AsyncIterator[Union[str, dict]]:
-    # 1. Retrieve via LangGraph
-    graph = _make_graph(vs)
-    state = await graph.ainvoke({
-        "query": query,
-        "doc_ids": doc_ids,
-        "top_k": rag_config.top_k,
-        "context": [],
-    })
-    context: list[dict] = state["context"]
+    # 1. Retrieve via retriever plugin
+    context = build_retriever(rag_config, vs).search(query, rag_config.top_k, doc_ids)
 
-    # 2. Rerank if configured (anything other than "none")
+    # 2. Rerank if configured
     if rag_config.reranker != "none" and context:
-        reranker = build_reranker(rag_config)
-        context = reranker.rerank(query, context)[: rag_config.rerank_top_n]
+        context = build_reranker(rag_config).rerank(query, context)[: rag_config.rerank_top_n]
 
     # 3. Stream tokens from LLM
     async for chunk in llm.astream(_build_messages(query, context, history)):

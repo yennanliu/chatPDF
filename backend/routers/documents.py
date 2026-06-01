@@ -62,7 +62,6 @@ async def upload_document(
 ):
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
-
     doc_id = str(uuid.uuid4())
     safe_name = Path(file.filename).name if file.filename else "upload.pdf"
     dest = upload_dir / f"{doc_id}_{safe_name}"

@@ -33,11 +33,10 @@ class VectorStore:
                     name=f"doc_{doc_id}",
                     embedding_function=self._embedding_fn,
                 )
-                n = min(top_k, col.count())
-                if n == 0:
-                    continue
-                r = col.query(query_texts=[query_text], n_results=n)
+                r = col.query(query_texts=[query_text], n_results=top_k)
                 docs = r["documents"][0]
+                if not docs:
+                    continue
                 metas = r["metadatas"][0]
                 dists = r["distances"][0]
                 for text, meta, dist in zip(docs, metas, dists):
@@ -59,5 +58,6 @@ def _chroma_client() -> chromadb.ClientAPI:
     return chromadb.PersistentClient(path=settings.chroma_data_dir)
 
 
+@lru_cache(maxsize=1)
 def get_vector_store() -> VectorStore:
     return VectorStore(_chroma_client())

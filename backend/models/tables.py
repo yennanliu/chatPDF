@@ -10,13 +10,17 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
 class Document(SQLModel, table=True):
     id: str = Field(default_factory=_new_id, primary_key=True)
     name: str
     file_path: str
     page_count: Optional[int] = None
     status: str = "pending"  # pending | indexed | error
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=_now)
 
 
 class Library(SQLModel, table=True):
@@ -24,7 +28,7 @@ class Library(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     rag_config: str = "{}"  # JSON blob — RAGConfig overrides
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=_now)
 
 
 class LibraryDocument(SQLModel, table=True):
@@ -36,7 +40,7 @@ class LibraryDocument(SQLModel, table=True):
     document_id: str = Field(
         sa_column=Column(String, ForeignKey("document.id", ondelete="CASCADE"), primary_key=True)
     )
-    added_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    added_at: datetime = Field(default_factory=_now)
 
 
 class Session(SQLModel, table=True):
@@ -48,8 +52,8 @@ class Session(SQLModel, table=True):
     )
     provider: str  # openai | google | anthropic
     model: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
 
 
 class Message(SQLModel, table=True):
@@ -61,4 +65,4 @@ class Message(SQLModel, table=True):
     role: str  # user | assistant
     content: str
     sources: Optional[str] = None  # JSON: [{doc_name, chunk_preview, score}]
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=_now)

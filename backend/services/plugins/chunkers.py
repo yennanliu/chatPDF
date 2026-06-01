@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from .base import BaseChunker
 
 
@@ -24,11 +26,10 @@ class RecursiveChunker(BaseChunker):
 class SentenceChunker(BaseChunker):
     """Splits on sentence boundaries — registered for future use."""
 
-    def __init__(self, chunk_size: int = 800) -> None:
+    def __init__(self, chunk_size: int = 800, chunk_overlap: int = 0) -> None:
         self.chunk_size = chunk_size
 
     def split(self, text: str) -> list[str]:
-        import re
         sentences = re.split(r"(?<=[.!?])\s+", text)
         chunks: list[str] = []
         current = ""

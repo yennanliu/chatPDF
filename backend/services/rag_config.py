@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -40,16 +41,19 @@ class RAGConfig:
 
 # ── Plugin registries ─────────────────────────────────────────────────────────
 
+@lru_cache(maxsize=1)
 def _chunker_registry() -> dict:
     from services.plugins.chunkers import RecursiveChunker, SentenceChunker
     return {"recursive": RecursiveChunker, "sentence": SentenceChunker}
 
 
+@lru_cache(maxsize=1)
 def _retriever_registry() -> dict:
     from services.plugins.retrievers import DenseRetriever, HybridRetriever
     return {"dense": DenseRetriever, "hybrid": HybridRetriever}
 
 
+@lru_cache(maxsize=1)
 def _reranker_registry() -> dict:
     from services.plugins.rerankers import CrossEncoderReranker, NoopReranker
     return {"none": NoopReranker, "cross_encoder": CrossEncoderReranker}
@@ -57,8 +61,6 @@ def _reranker_registry() -> dict:
 
 def build_chunker(cfg: RAGConfig) -> BaseChunker:
     cls = _chunker_registry()[cfg.chunker]
-    if cfg.chunker == "sentence":
-        return cls(chunk_size=cfg.chunk_size)
     return cls(chunk_size=cfg.chunk_size, chunk_overlap=cfg.chunk_overlap)
 
 

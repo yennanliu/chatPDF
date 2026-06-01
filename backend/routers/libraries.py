@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -30,6 +32,10 @@ class DocumentSnippet(BaseModel):
     status: str
 
 
+class AddDocumentBody(BaseModel):
+    doc_id: str
+
+
 class LibraryOut(BaseModel):
     library_id: str
     name: str
@@ -40,7 +46,6 @@ class LibraryOut(BaseModel):
 
 
 def _lib_out(lib: Library, docs: list[Document]) -> LibraryOut:
-    import json
     return LibraryOut(
         library_id=lib.id,
         name=lib.name,
@@ -65,7 +70,6 @@ def _get_lib_docs(lib_id: str, db: Session) -> list[Document]:
 
 @router.post("", status_code=201, response_model=LibraryOut)
 def create_library(body: LibraryCreate, db: Session = Depends(get_db)):
-    import json
     lib = Library(
         name=body.name,
         description=body.description,
@@ -93,7 +97,6 @@ def get_library(library_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/{library_id}", response_model=LibraryOut)
 def update_library(library_id: str, body: LibraryUpdate, db: Session = Depends(get_db)):
-    import json
     lib = db.get(Library, library_id)
     if not lib:
         raise HTTPException(status_code=404, detail="Library not found")
@@ -121,18 +124,15 @@ def delete_library(library_id: str, db: Session = Depends(get_db)):
 @router.post("/{library_id}/documents", response_model=LibraryOut)
 def add_document_to_library(
     library_id: str,
-    body: dict,
+    body: AddDocumentBody,
     db: Session = Depends(get_db),
 ):
     lib = db.get(Library, library_id)
     if not lib:
         raise HTTPException(status_code=404, detail="Library not found")
 
-    doc_id = body.get("doc_id")
-    if not doc_id:
-        raise HTTPException(status_code=422, detail="doc_id required")
-
-    doc = db.get(Document, doc_id)
+    doc = db.get(Document, body.doc_id)
+    doc_id = body.doc_id
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 

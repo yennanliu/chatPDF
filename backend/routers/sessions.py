@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -48,7 +49,6 @@ class SessionDetailOut(SessionOut):
 
 
 def _msg_out(m: Message) -> MessageOut:
-    import json
     return MessageOut(
         role=m.role,
         content=m.content,
@@ -100,7 +100,15 @@ def get_session(session_id: str, db: DBSession = Depends(get_db)):
     msgs = db.exec(
         select(Message).where(Message.session_id == session_id).order_by(Message.created_at)
     ).all()
-    return SessionDetailOut(**_session_out(s).model_dump(), messages=[_msg_out(m) for m in msgs])
+    return SessionDetailOut(
+        session_id=s.id,
+        title=s.title,
+        library_id=s.library_id,
+        provider=s.provider,
+        model=s.model,
+        created_at=s.created_at.isoformat(),
+        messages=[_msg_out(m) for m in msgs],
+    )
 
 
 @router.patch("/{session_id}", response_model=SessionOut)
