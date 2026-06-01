@@ -1,6 +1,6 @@
-FROM python:3.14-slim
+# ── Base: system deps + uv ────────────────────────────────────────────────────
+FROM python:3.14-slim AS base
 
-# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # libgomp1 is required by ONNX runtime (used by ChromaDB's local embedder)
@@ -10,15 +10,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install deps before copying source for better layer caching
+# ── Test stage: all deps (including dev) ─────────────────────────────────────
+FROM base AS test
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project
+
+COPY . .
+RUN uv sync --frozen
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["pytest", "--tb=short", "-q"]
+
+# ── Production stage: prod deps only ─────────────────────────────────────────
+FROM base AS production
+
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Copy source and finalise install
 COPY . .
 RUN uv sync --frozen --no-dev
 
-# Pre-activate venv so uvicorn runs without uv overhead
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 

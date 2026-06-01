@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Core functionality smoke test against the live backend (http://localhost:8000).
+# Core functionality smoke test against the live backend.
 # Usage: bash scripts/test_core.sh [path/to/test.pdf]
+# Env:   CHATPDF_API=http://localhost:8000  (default)
 set -euo pipefail
 
-BASE="http://localhost:8000/api"
+BASE="${CHATPDF_API:-http://localhost:8000}/api"
 PDF="${1:-}"
 PASS=0; FAIL=0
 

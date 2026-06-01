@@ -1,7 +1,11 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: production
     restart: unless-stopped
+    ports:
+      - "8000:8000"   # direct API access; also proxied by nginx on port 80
     environment:
       # LLM provider keys — set in a .env file or export before running
       OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
@@ -12,8 +16,8 @@ services:
       CHROMA_DATA_DIR: /data/chroma
       UPLOAD_DIR:      /data/uploads
       SQLITE_URL:      sqlite:////data/chatpdf.db
-      # Allow requests from the nginx frontend
-      CORS_ORIGINS: http://localhost
+      # nginx frontend (port 80) + direct backend access (port 8000)
+      CORS_ORIGINS: "http://localhost,http://localhost:8000"
     volumes:
       - app_data:/data
     healthcheck:
