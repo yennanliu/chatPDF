@@ -43,8 +43,16 @@ class RAGConfig:
 
 @lru_cache(maxsize=1)
 def _chunker_registry() -> dict:
-    from services.plugins.chunkers import RecursiveChunker, SentenceChunker
-    return {"recursive": RecursiveChunker, "sentence": SentenceChunker}
+    from services.plugins.chunkers import RecursiveChunker, SemanticChunker, SentenceChunker
+    return {
+        "recursive": RecursiveChunker,
+        "sentence": SentenceChunker,
+        "semantic": SemanticChunker,
+    }
+
+
+def available_chunkers() -> list[str]:
+    return list(_chunker_registry())
 
 
 @lru_cache(maxsize=1)

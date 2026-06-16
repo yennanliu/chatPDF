@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 import fitz
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -12,6 +12,7 @@ from config import settings
 from db import get_db
 from models.tables import Document
 from services.ingestion import ingest_document
+from services.rag_config import RAGConfig, available_chunkers
 from vector_store import VectorStore, get_vector_store
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -41,10 +42,12 @@ def _doc_out(doc: Document) -> DocumentOut:
     )
 
 
-def _bg_ingest(doc_id: str, file_path: str, db: Session, vs: VectorStore) -> None:
+def _bg_ingest(
+    doc_id: str, file_path: str, db: Session, vs: VectorStore, rag_config: RAGConfig
+) -> None:
     """Background task: chunk + embed PDF, update status when done."""
     try:
-        ingest_document(doc_id, file_path, db, vs)
+        ingest_document(doc_id, file_path, db, vs, rag_config)
     except Exception:
         doc = db.get(Document, doc_id)
         if doc:
@@ -57,9 +60,18 @@ def _bg_ingest(doc_id: str, file_path: str, db: Session, vs: VectorStore) -> Non
 async def upload_document(
     file: UploadFile,
     background_tasks: BackgroundTasks,
+    chunker: str = Form("recursive"),
+    chunk_size: int = Form(800),
+    chunk_overlap: int = Form(100),
     db: Session = Depends(get_db),
     vs: VectorStore = Depends(get_vector_store),
 ):
+    if chunker not in available_chunkers():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown chunker '{chunker}'. Choose one of: {', '.join(available_chunkers())}",
+        )
+
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     doc_id = str(uuid.uuid4())
@@ -82,9 +94,11 @@ async def upload_document(
     db.commit()
     db.refresh(doc)
 
+    rag_config = RAGConfig(chunker=chunker, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
     # FastAPI guarantees yield-dep teardown waits for background tasks,
     # so passing db here is safe — the session stays open until _bg_ingest returns.
-    background_tasks.add_task(_bg_ingest, doc_id, str(dest), db, vs)
+    background_tasks.add_task(_bg_ingest, doc_id, str(dest), db, vs, rag_config)
 
     return _doc_out(doc)
 

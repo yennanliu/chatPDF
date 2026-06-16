@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, triggerRef } from 'vue'
-import { useDocumentsStore, type Document } from '@/stores/documents'
+import { ref, reactive, onMounted, computed, triggerRef } from 'vue'
+import { useDocumentsStore, type Document, type ChunkOptions } from '@/stores/documents'
 
 const store      = useDocumentsStore()
 const fileInput  = ref<HTMLInputElement | null>(null)
 const isDragOver = ref(false)
 
 const uploadingNames = ref<Set<string>>(new Set())
+
+// ── Chunking strategy (applied at ingest time, per upload) ───────────────────
+const showAdvanced = ref(false)
+const chunk = reactive<ChunkOptions>({ chunker: 'recursive', chunk_size: 800, chunk_overlap: 100 })
+const isSemantic = computed(() => chunk.chunker === 'semantic')
 
 onMounted(() => store.fetchDocuments())
 
@@ -29,7 +34,7 @@ async function handleFiles(files: FileList | null) {
     }
     uploadingNames.value.add(file.name)
     triggerRef(uploadingNames)
-    await store.uploadDocument(file)
+    await store.uploadDocument(file, { ...chunk })
     uploadingNames.value.delete(file.name)
     triggerRef(uploadingNames)
   }
@@ -72,6 +77,37 @@ function onDrop(e: DragEvent) {
       </div>
       <p class="drop-label">Drop PDFs here or <strong>click to browse</strong></p>
       <p class="drop-hint">Only .pdf files · multiple files supported</p>
+    </div>
+
+    <!-- Chunking strategy -->
+    <div class="chunk-panel">
+      <button type="button" class="chunk-toggle" @click="showAdvanced = !showAdvanced">
+        <span class="chunk-caret" :class="{ open: showAdvanced }">▸</span>
+        Chunking strategy
+        <span class="chunk-summary">{{ chunk.chunker }} · {{ chunk.chunk_size }} chars</span>
+      </button>
+      <div v-if="showAdvanced" class="chunk-fields">
+        <label class="chunk-field">
+          <span>Chunker</span>
+          <select v-model="chunk.chunker">
+            <option value="recursive">Recursive (fixed-size + overlap)</option>
+            <option value="sentence">Sentence (boundary-aware)</option>
+            <option value="semantic">Semantic (embedding breakpoints)</option>
+          </select>
+        </label>
+        <label class="chunk-field">
+          <span>{{ isSemantic ? 'Max chunk size' : 'Chunk size' }} (chars)</span>
+          <input v-model.number="chunk.chunk_size" type="number" min="50" max="8000" step="50" />
+        </label>
+        <label class="chunk-field" :class="{ disabled: isSemantic }">
+          <span>Overlap (chars)</span>
+          <input v-model.number="chunk.chunk_overlap" type="number" min="0" max="1000" step="10" :disabled="isSemantic" />
+        </label>
+        <p class="chunk-note">
+          Applied when this PDF is indexed — it is fixed once uploaded. Re-upload to re-chunk.
+          <template v-if="isSemantic"> Semantic chunking embeds each sentence and splits on topic shifts; overlap is ignored.</template>
+        </p>
+      </div>
     </div>
 
     <!-- Error -->
@@ -202,6 +238,33 @@ function onDrop(e: DragEvent) {
 .drop-label { font-size: .9rem; color: var(--text); margin-bottom: 4px; }
 .drop-label strong { color: var(--brand-orange); }
 .drop-hint  { font-size: .8rem; color: var(--text-muted); }
+
+/* ── Chunking panel ──────────────────────────────────────────────────────────── */
+.chunk-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.chunk-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 14px; background: none; border: none; cursor: pointer;
+  font-size: .85rem; color: var(--text); text-align: left;
+}
+.chunk-caret { transition: transform .15s; color: var(--text-muted); }
+.chunk-caret.open { transform: rotate(90deg); }
+.chunk-summary { margin-left: auto; font-size: .75rem; color: var(--text-muted); }
+.chunk-fields {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  padding: 4px 14px 14px;
+}
+.chunk-field { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; color: var(--text-muted); }
+.chunk-field.disabled { opacity: .5; }
+.chunk-field select, .chunk-field input {
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: .82rem; background: var(--surface, #fff); color: var(--text);
+}
+.chunk-note { grid-column: 1 / -1; font-size: .72rem; color: var(--text-muted); margin: 0; }
+@media (max-width: 768px) { .chunk-fields { grid-template-columns: 1fr; } }
 
 /* ── Error ───────────────────────────────────────────────────────────────────── */
 .error-banner {
