@@ -51,20 +51,32 @@ vectors. Chunk config lives at upload; re-upload to re-chunk.
 
 ## 2. Proposals
 
-### 2.1 Hybrid retrieval (dense + BM25) — **high impact**
+### Shipped — Hybrid retrieval (dense + BM25)
 
-`HybridRetriever` exists but falls back to pure dense (`retrievers.py:26`). Dense
-embeddings miss exact-term matches (names, codes, IDs, acronyms). Combine:
+`HybridRetriever` now fuses dense vector search with a dependency-free BM25
+(Okapi) sparse scorer. Dense embeddings capture meaning but miss exact-term
+matches (names, codes, IDs, acronyms); BM25 captures lexical overlap.
 
 ```
-score = alpha * dense_sim + (1 - alpha) * bm25_score    # alpha from RAGConfig.hybrid_alpha
+fused = alpha * dense_norm + (1 - alpha) * sparse_norm   # alpha = RAGConfig.hybrid_alpha
 ```
 
-- Build a BM25 index over each doc's chunks (e.g. `rank_bm25`), or use a sparse
-  index. Normalize both score scales (min-max or RRF) before blending.
-- **Reciprocal Rank Fusion (RRF)** is a robust, scale-free alternative to linear
-  blending and needs no normalization.
-- `hybrid_alpha` is already in `RAGConfig` — just needs wiring.
+| Piece | Where |
+|---|---|
+| `BM25` Okapi scorer (k1=1.5, b=0.75) | `services/plugins/sparse.py` |
+| `HybridRetriever` fusion (min-max normalized) | `services/plugins/retrievers.py` |
+| `VectorStore.get_chunks(doc_ids)` — corpus for BM25 | `vector_store.py` |
+| `build_retriever` threads `hybrid_alpha` | `services/rag_config.py` |
+
+- Candidates are the full chunk corpus for the docs in scope; both score sets
+  are min-max normalized to `[0,1]` then blended. `alpha=1.0` is pure dense,
+  `alpha=0.0` is pure sparse; the `RAGConfig` default `0.5` weights them evenly.
+- Set per library via `retriever: "hybrid"` + `hybrid_alpha` in its `RAGConfig`
+  (PATCH `/api/libraries/{id}`).
+- **Cost note:** BM25 is rebuilt per query over the in-scope corpus (one
+  `col.get()` + tokenize per doc). Fine at this app's single-user scale; for
+  large corpora, persist the sparse index or switch fusion to **RRF**
+  (rank-based, scale-free, no normalization).
 
 ### 2.2 Cross-encoder reranking — **high impact, already half-built**
 
@@ -125,9 +137,10 @@ which measurably cuts failed retrievals.
 ## Priority
 
 ```
+Shipped     →  §1 chunking + semantic · hybrid retrieval (dense + BM25)
 Quick wins  →  2.2 reranker default · 2.6 dedup · 2.4 score floor
-High impact →  2.1 hybrid (RRF) · 2.7 eval harness · 2.3 query rewriting
-Polish      →  2.5 page citations · 2.8 contextual retrieval
+High impact →  2.7 eval harness · 2.3 query rewriting
+Polish      →  2.5 page citations · 2.8 contextual retrieval · RRF fusion
 ```
 
 Recommended first step: **2.7 (eval harness)** — without it, every other tuning

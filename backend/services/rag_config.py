@@ -74,6 +74,8 @@ def build_chunker(cfg: RAGConfig) -> BaseChunker:
 
 def build_retriever(cfg: RAGConfig, vs: VectorStore) -> BaseRetriever:
     cls = _retriever_registry()[cfg.retriever]
+    if cfg.retriever == "hybrid":
+        return cls(vs, alpha=cfg.hybrid_alpha)
     return cls(vs)
 
 

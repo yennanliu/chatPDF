@@ -71,13 +71,40 @@ def test_dense_retriever_delegates_to_vs():
     assert result == [{"text": "result", "score": 0.9}]
 
 
-def test_hybrid_retriever_delegates_to_vs():
+def test_hybrid_retriever_fuses_corpus_and_dense():
+    """HybridRetriever pulls the chunk corpus, blends BM25 + dense, returns fused dicts."""
+    meta = {"doc_id": "doc1", "chunk_index": 0, "file": "a.pdf"}
     vs = MagicMock()
-    vs.query.return_value = [{"text": "hybrid result", "score": 0.8}]
-    retriever = HybridRetriever(vs, alpha=0.7)
-    result = retriever.search("query", top_k=5, doc_ids=["doc1", "doc2"])
-    vs.query.assert_called_once_with(["doc1", "doc2"], "query", 5)
-    assert result == [{"text": "hybrid result", "score": 0.8}]
+    vs.get_chunks.return_value = [{"text": "hybrid result", "metadata": meta}]
+    vs.query.return_value = [{"text": "hybrid result", "metadata": meta, "score": 0.8}]
+    result = HybridRetriever(vs, alpha=0.7).search("result", top_k=5, doc_ids=["doc1"])
+    vs.get_chunks.assert_called_once_with(["doc1"])
+    assert result[0]["text"] == "hybrid result"
+    assert "score" in result[0]
+
+
+def test_hybrid_retriever_handles_no_term_overlap():
+    """Query matching no corpus terms → sparse scores all equal (rng 0 branch)."""
+    meta0 = {"doc_id": "d", "chunk_index": 0}
+    meta1 = {"doc_id": "d", "chunk_index": 1}
+    vs = MagicMock()
+    vs.get_chunks.return_value = [{"text": "apple", "metadata": meta0}, {"text": "banana", "metadata": meta1}]
+    vs.query.return_value = [
+        {"text": "apple", "metadata": meta0, "score": 0.9},
+        {"text": "banana", "metadata": meta1, "score": 0.2},
+    ]
+    out = HybridRetriever(vs, alpha=0.5).search("zzz", top_k=2, doc_ids=["d"])
+    assert out[0]["text"] == "apple"  # falls back to dense order
+
+
+def test_hybrid_retriever_handles_empty_dense():
+    """Dense returns nothing → dense map empty (_minmax empty branch)."""
+    meta = {"doc_id": "d", "chunk_index": 0}
+    vs = MagicMock()
+    vs.get_chunks.return_value = [{"text": "rare", "metadata": meta}]
+    vs.query.return_value = []
+    out = HybridRetriever(vs, alpha=0.5).search("rare", top_k=1, doc_ids=["d"])
+    assert out[0]["text"] == "rare"
 
 
 def test_hybrid_retriever_stores_alpha():
