@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useLibrariesStore } from '@/stores/libraries'
 import LibraryPicker from '@/components/LibraryPicker.vue'
 
@@ -48,6 +48,63 @@ async function remove(id: string) {
   if (!confirm('Delete this library? Sessions will also be deleted.')) return
   if (selectedId.value === id) selectedId.value = null
   await store.deleteLibrary(id)
+}
+
+// ── Retrieval settings (RAGConfig) ───────────────────────────────────────────
+const showRag  = ref(false)
+const savingRag = ref(false)
+const ragSaved  = ref(false)
+
+interface RagForm {
+  retriever: 'dense' | 'hybrid'
+  hybrid_alpha: number
+  top_k: number
+  reranker: 'none' | 'cross_encoder'
+  rerank_top_n: number
+}
+// Defaults mirror backend RAGConfig.
+const rag = reactive<RagForm>({
+  retriever: 'dense', hybrid_alpha: 0.5, top_k: 5, reranker: 'none', rerank_top_n: 3,
+})
+const isHybrid     = computed(() => rag.retriever === 'hybrid')
+const rerankActive = computed(() => rag.reranker !== 'none')
+
+function num(cfg: Record<string, unknown>, key: string, fallback: number): number {
+  const v = cfg[key]
+  return typeof v === 'number' ? v : fallback
+}
+function seedRag(cfg: Record<string, unknown>) {
+  rag.retriever    = cfg.retriever === 'hybrid' ? 'hybrid' : 'dense'
+  rag.reranker     = cfg.reranker === 'cross_encoder' ? 'cross_encoder' : 'none'
+  rag.hybrid_alpha = num(cfg, 'hybrid_alpha', 0.5)
+  rag.top_k        = num(cfg, 'top_k', 5)
+  rag.rerank_top_n = num(cfg, 'rerank_top_n', 3)
+}
+
+// Reseed the form whenever a different library is selected.
+watch(selectedId, () => {
+  ragSaved.value = false
+  if (selectedLib.value) seedRag(selectedLib.value.rag_config)
+}, { immediate: true })
+
+async function saveRag() {
+  if (!selectedLib.value) return
+  savingRag.value = true
+  ragSaved.value = false
+  try {
+    // Preserve any non-retrieval keys (e.g. upload-time chunker fields).
+    await store.updateRagConfig(selectedLib.value.library_id, {
+      ...selectedLib.value.rag_config,
+      retriever: rag.retriever,
+      hybrid_alpha: rag.hybrid_alpha,
+      top_k: rag.top_k,
+      reranker: rag.reranker,
+      rerank_top_n: rag.rerank_top_n,
+    })
+    ragSaved.value = true
+  } finally {
+    savingRag.value = false
+  }
 }
 </script>
 
@@ -172,6 +229,53 @@ async function remove(id: string) {
               </div>
             </div>
           </div>
+
+          <!-- Retrieval settings -->
+          <div class="rag-panel">
+            <button type="button" class="rag-toggle" @click="showRag = !showRag">
+              <span class="rag-caret" :class="{ open: showRag }">▸</span>
+              Retrieval settings
+              <span class="rag-summary">{{ rag.retriever }}<template v-if="isHybrid"> · α {{ rag.hybrid_alpha }}</template> · top {{ rag.top_k }}</span>
+            </button>
+            <div v-if="showRag" class="rag-body">
+              <div class="rag-fields">
+                <label class="rag-field">
+                  <span>Retriever</span>
+                  <select v-model="rag.retriever">
+                    <option value="dense">Dense (vector only)</option>
+                    <option value="hybrid">Hybrid (vector + BM25)</option>
+                  </select>
+                </label>
+                <label class="rag-field" :class="{ disabled: !isHybrid }">
+                  <span>Hybrid weight α <small>(1 = dense, 0 = sparse)</small></span>
+                  <input v-model.number="rag.hybrid_alpha" type="number" min="0" max="1" step="0.1" :disabled="!isHybrid" />
+                </label>
+                <label class="rag-field">
+                  <span>Top-K retrieved</span>
+                  <input v-model.number="rag.top_k" type="number" min="1" max="50" step="1" />
+                </label>
+                <label class="rag-field">
+                  <span>Reranker</span>
+                  <select v-model="rag.reranker">
+                    <option value="none">None</option>
+                    <option value="cross_encoder">Cross-encoder</option>
+                  </select>
+                </label>
+                <label class="rag-field" :class="{ disabled: !rerankActive }">
+                  <span>Rerank top-N</span>
+                  <input v-model.number="rag.rerank_top_n" type="number" min="1" max="20" step="1" :disabled="!rerankActive" />
+                </label>
+              </div>
+              <div class="rag-actions">
+                <button class="btn btn-sm btn-green" :disabled="savingRag" @click="saveRag">
+                  <span v-if="savingRag" class="spinner" />
+                  Save settings
+                </button>
+                <span v-if="ragSaved" class="rag-saved">✓ Saved — applies to new questions in this library's sessions.</span>
+              </div>
+            </div>
+          </div>
+
           <LibraryPicker :library-id="selectedLib.library_id" />
         </template>
       </section>
@@ -310,4 +414,34 @@ async function remove(id: string) {
   color: var(--brand-green);
   display: flex; align-items: center; justify-content: center;
 }
+
+/* ── Retrieval settings panel ────────────────────────────────────────────────── */
+.rag-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  margin-bottom: 20px;
+}
+.rag-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 14px; background: none; border: none; cursor: pointer;
+  font-size: .85rem; color: var(--text); text-align: left;
+}
+.rag-caret { transition: transform .15s; color: var(--text-muted); }
+.rag-caret.open { transform: rotate(90deg); }
+.rag-summary { margin-left: auto; font-size: .75rem; color: var(--text-muted); }
+.rag-body { padding: 4px 14px 14px; }
+.rag-fields {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+}
+.rag-field { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; color: var(--text-muted); }
+.rag-field small { font-weight: 400; opacity: .8; }
+.rag-field.disabled { opacity: .5; }
+.rag-field select, .rag-field input {
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: .82rem; background: var(--surface, #fff); color: var(--text);
+}
+.rag-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.rag-saved { font-size: .75rem; color: var(--brand-green); }
+@media (max-width: 768px) { .rag-fields { grid-template-columns: 1fr; } }
 </style>
