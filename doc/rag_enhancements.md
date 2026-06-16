@@ -5,6 +5,9 @@
 > Every component plugs into the existing `RAGConfig` + registry design
 > (`backend/services/rag_config.py`) — adding a strategy is one subclass + one
 > registry entry, no pipeline changes.
+>
+> Companion docs: [`rag_tuning.md`](rag_tuning.md) — how to use the knobs ·
+> [`rag_evaluation.md`](rag_evaluation.md) — how to measure whether a change helped.
 
 ---
 
