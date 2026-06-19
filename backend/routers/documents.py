@@ -61,8 +61,8 @@ async def upload_document(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     chunker: str = Form("recursive"),
-    chunk_size: int = Form(800),
-    chunk_overlap: int = Form(100),
+    chunk_size: int = Form(800, gt=0),
+    chunk_overlap: int = Form(100, ge=0),
     db: Session = Depends(get_db),
     vs: VectorStore = Depends(get_vector_store),
 ):

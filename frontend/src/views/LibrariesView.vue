@@ -91,6 +91,7 @@ async function saveRag() {
   if (!selectedLib.value) return
   savingRag.value = true
   ragSaved.value = false
+  store.error = null
   try {
     // Preserve any non-retrieval keys (e.g. upload-time chunker fields).
     await store.updateRagConfig(selectedLib.value.library_id, {
@@ -102,6 +103,8 @@ async function saveRag() {
       rerank_top_n: rag.rerank_top_n,
     })
     ragSaved.value = true
+  } catch (err) {
+    store.error = err instanceof Error ? err.message : 'Failed to save settings'
   } finally {
     savingRag.value = false
   }

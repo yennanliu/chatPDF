@@ -97,3 +97,23 @@ async def test_upload_rejects_unknown_chunker(client):
         data={"chunker": "does-not-exist"},
     )
     assert resp.status_code == 422
+
+
+async def test_upload_rejects_non_positive_chunk_size(client):
+    pdf_bytes = _make_pdf("One sentence.")
+    resp = await client.post(
+        "/api/documents/upload",
+        files={"file": ("sample.pdf", pdf_bytes, "application/pdf")},
+        data={"chunk_size": "0"},
+    )
+    assert resp.status_code == 422
+
+
+async def test_upload_rejects_negative_chunk_overlap(client):
+    pdf_bytes = _make_pdf("One sentence.")
+    resp = await client.post(
+        "/api/documents/upload",
+        files={"file": ("sample.pdf", pdf_bytes, "application/pdf")},
+        data={"chunk_overlap": "-1"},
+    )
+    assert resp.status_code == 422
