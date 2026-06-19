@@ -46,6 +46,22 @@ class VectorStore:
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
 
+    def get_chunks(self, doc_ids: list[str]) -> list[dict]:
+        """Return every chunk for the given docs as [{text, metadata}] — used by BM25."""
+        out: list[dict] = []
+        for doc_id in doc_ids:
+            try:
+                col = self._client.get_collection(
+                    name=f"doc_{doc_id}",
+                    embedding_function=self._embedding_fn,
+                )
+                r = col.get(include=["documents", "metadatas"])
+                for text, meta in zip(r["documents"], r["metadatas"]):
+                    out.append({"text": text, "metadata": meta})
+            except Exception:
+                pass
+        return out
+
     def delete_document(self, doc_id: str) -> None:
         try:
             self._client.delete_collection(f"doc_{doc_id}")

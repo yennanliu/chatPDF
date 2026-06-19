@@ -4,6 +4,8 @@ RAG-powered multi-PDF chat app. Upload PDFs into named Libraries, chat against t
 
 Design doc: [`doc/system_design.md`](doc/system_design.md) | Extension guide: [`doc/extending.md`](doc/extending.md)
 
+RAG docs: [`doc/rag_tuning.md`](doc/rag_tuning.md) (knobs) · [`doc/rag_evaluation.md`](doc/rag_evaluation.md) (measuring quality) · [`doc/rag_enhancements.md`](doc/rag_enhancements.md) (roadmap)
+
 ---
 
 ## Repository layout

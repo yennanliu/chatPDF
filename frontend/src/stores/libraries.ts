@@ -69,6 +69,18 @@ export const useLibrariesStore = defineStore('libraries', () => {
     if (idx !== -1) libraries.value[idx] = updated
   }
 
+  async function updateRagConfig(id: string, rag_config: Record<string, unknown>): Promise<void> {
+    const res = await fetch(`/api/libraries/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rag_config }),
+    })
+    if (!res.ok) throw new Error(res.statusText)
+    const updated: Library = await res.json()
+    const idx = libraries.value.findIndex(l => l.library_id === id)
+    if (idx !== -1) libraries.value[idx] = updated
+  }
+
   async function deleteLibrary(id: string): Promise<void> {
     const res = await fetch(`/api/libraries/${id}`, { method: 'DELETE' })
     if (!res.ok && res.status !== 404) throw new Error(res.statusText)
@@ -100,6 +112,6 @@ export const useLibrariesStore = defineStore('libraries', () => {
   return {
     libraries, loading, error,
     fetchLibraries, fetchLibrary, createLibrary, renameLibrary, deleteLibrary,
-    addDocument, removeDocument,
+    updateRagConfig, addDocument, removeDocument,
   }
 })

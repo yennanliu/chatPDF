@@ -9,6 +9,12 @@ export interface Document {
   created_at: string
 }
 
+export interface ChunkOptions {
+  chunker: 'recursive' | 'sentence' | 'semantic'
+  chunk_size: number
+  chunk_overlap: number
+}
+
 export const useDocumentsStore = defineStore('documents', () => {
   const documents = ref<Document[]>([])
   const loading = ref(false)
@@ -30,11 +36,16 @@ export const useDocumentsStore = defineStore('documents', () => {
 
   const _cancelledPolls = new Set<string>()
 
-  async function uploadDocument(file: File): Promise<Document | null> {
+  async function uploadDocument(file: File, opts?: ChunkOptions): Promise<Document | null> {
     error.value = null
     try {
       const form = new FormData()
       form.append('file', file)
+      if (opts) {
+        form.append('chunker', opts.chunker)
+        form.append('chunk_size', String(opts.chunk_size))
+        form.append('chunk_overlap', String(opts.chunk_overlap))
+      }
       const res = await fetch('/api/documents/upload', { method: 'POST', body: form })
       if (!res.ok) throw new Error(await res.text())
       const doc: Document = await res.json()
