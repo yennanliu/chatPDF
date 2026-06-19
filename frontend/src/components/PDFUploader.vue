@@ -182,7 +182,7 @@ function onDrop(e: DragEvent) {
             <button
               class="btn btn-sm btn-ghost btn-icon"
               title="Delete document"
-              :disabled="uploadingNames.value.has((entry as Document).name)"
+              :disabled="uploadingNames.has((entry as Document).name)"
               style="color:var(--clr-danger)"
               @click="store.deleteDocument((entry as Document).doc_id)"
             >
