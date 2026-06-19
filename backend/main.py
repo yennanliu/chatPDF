@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,10 +8,26 @@ from config import settings
 from db import init_db
 from routers import chat_ws, documents, libraries, sessions
 
+# App-wide logging. basicConfig wires our module loggers to stdout alongside
+# uvicorn's; force=True so it still applies under uvicorn's own log setup.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-7s %(name)s | %(message)s",
+    datefmt="%H:%M:%S",
+    force=True,
+)
+logger = logging.getLogger("chatpdf")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    logger.info(
+        "startup: embedding_backend=%s cors_origins=%s upload_dir=%s",
+        settings.embedding_backend,
+        settings.cors_origins_list,
+        settings.upload_dir,
+    )
     yield
 
 

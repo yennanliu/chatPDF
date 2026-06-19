@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from services.rag_config import RAGConfig, available_chunkers
 from vector_store import VectorStore, get_vector_store
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
+logger = logging.getLogger("chatpdf.documents")
 
 
 class DocumentOut(BaseModel):
@@ -49,6 +51,7 @@ def _bg_ingest(
     try:
         ingest_document(doc_id, file_path, db, vs, rag_config)
     except Exception:
+        logger.exception("ingest FAILED: doc_id=%s file=%s — marking status=error", doc_id, file_path)
         doc = db.get(Document, doc_id)
         if doc:
             doc.status = "error"
@@ -80,6 +83,10 @@ async def upload_document(
 
     content = await file.read()
     dest.write_bytes(content)
+    logger.info(
+        "upload received: doc_id=%s name=%s bytes=%d chunker=%s",
+        doc_id, safe_name, len(content), chunker,
+    )
 
     # Count pages synchronously — cheap header read, no text extraction
     page_count: int | None = None
@@ -99,6 +106,7 @@ async def upload_document(
     # FastAPI guarantees yield-dep teardown waits for background tasks,
     # so passing db here is safe — the session stays open until _bg_ingest returns.
     background_tasks.add_task(_bg_ingest, doc_id, str(dest), db, vs, rag_config)
+    logger.info("upload accepted, ingest scheduled: doc_id=%s pages=%s", doc_id, page_count)
 
     return _doc_out(doc)
 
@@ -127,11 +135,21 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    logger.info("delete start: doc_id=%s name=%s", doc_id, doc.name)
     vs.delete_document(doc_id)
 
     dest = Path(doc.file_path)
     if dest.exists():
         dest.unlink()
 
-    db.delete(doc)
-    db.commit()
+    try:
+        db.delete(doc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("delete FAILED (db): doc_id=%s — likely referenced by a library", doc_id)
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete: document is still a member of one or more libraries.",
+        )
+    logger.info("delete done: doc_id=%s", doc_id)
