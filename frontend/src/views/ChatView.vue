@@ -23,7 +23,7 @@ const createError = ref<string | null>(null)
 
 const MODELS: Record<string, string[]> = {
   openai:    ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-  google:    ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+  google:    ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
   anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
 }
 
