@@ -26,8 +26,11 @@ function formatDate(iso: string) {
 
 async function handleFiles(files: FileList | null) {
   if (!files?.length) return
+  // Snapshot before clearing the input: `files` is the live input.files
+  // FileList, so resetting the input would empty it mid-loop (browse path).
+  const selected = Array.from(files)
   if (fileInput.value) fileInput.value.value = ''
-  for (const file of Array.from(files)) {
+  for (const file of selected) {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       store.error = `"${file.name}" is not a PDF — only .pdf files are accepted`
       continue
