@@ -6,6 +6,8 @@ Design doc: [`doc/system_design.md`](doc/system_design.md) | Extension guide: [`
 
 RAG docs: [`doc/rag_tuning.md`](doc/rag_tuning.md) (knobs) · [`doc/rag_evaluation.md`](doc/rag_evaluation.md) (measuring quality) · [`doc/rag_enhancements.md`](doc/rag_enhancements.md) (roadmap)
 
+Debugging: [`doc/e2e_debugging.md`](doc/e2e_debugging.md) — browser-driven E2E debugging (`cd frontend && npm run e2e:upload`) for UI bugs `curl` can't see
+
 ---
 
 ## Repository layout
