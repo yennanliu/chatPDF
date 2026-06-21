@@ -8,10 +8,17 @@ export interface MessageOut {
   created_at: string
 }
 
+export interface DocumentSnippet {
+  doc_id: string
+  name: string
+  status: string
+}
+
 export interface Session {
   session_id: string
   title: string
-  library_id: string
+  documents: DocumentSnippet[]
+  rag_config: Record<string, unknown>
   provider: string
   model: string
   created_at: string
@@ -50,10 +57,11 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   async function createSession(payload: {
-    library_id: string
+    doc_ids: string[]
     provider: string
     model: string
     title?: string
+    rag_config?: Record<string, unknown>
   }): Promise<Session> {
     const res = await fetch('/api/sessions', {
       method: 'POST',

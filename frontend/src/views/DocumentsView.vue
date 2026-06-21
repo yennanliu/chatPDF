@@ -10,7 +10,7 @@ import PDFUploader from '@/components/PDFUploader.vue'
         Upload
       </div>
       <h1>Your Documents</h1>
-      <p>Drop PDFs here to index them. Once indexed, add them to a Library and start chatting.</p>
+      <p>Drop PDFs here to index them. Once indexed, start a chat and pick which documents to ask about.</p>
     </div>
     <div class="page-body">
       <PDFUploader />

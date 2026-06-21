@@ -1,25 +1,28 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSessionsStore } from '@/stores/sessions'
-import { useLibrariesStore } from '@/stores/libraries'
+import { useDocumentsStore } from '@/stores/documents'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import ChatWindow     from '@/components/ChatWindow.vue'
 
 const sessStore     = useSessionsStore()
-const libStore      = useLibrariesStore()
+const docStore      = useDocumentsStore()
 
 const activeSessionId   = ref<string | null>(null)
 const showModal         = ref(false)
 const sessionDrawerOpen = ref(false)
 
 const form = ref({
-  library_id: '',
-  provider:   'openai' as 'openai' | 'google' | 'anthropic',
-  model:      'gpt-4o',
-  title:      '',
+  doc_ids:  [] as string[],
+  provider: 'openai' as 'openai' | 'google' | 'anthropic',
+  model:    'gpt-4o',
+  title:    '',
 })
 const creating    = ref(false)
 const createError = ref<string | null>(null)
+
+// Only indexed documents are eligible to chat against.
+const indexedDocs = computed(() => docStore.documents.filter(d => d.status === 'indexed'))
 
 const MODELS: Record<string, string[]> = {
   openai:    ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
@@ -35,20 +38,20 @@ const PROVIDER_META: Record<string, { label: string; color: string; bg: string }
 
 function openModal() {
   createError.value = null
-  form.value = { library_id: libStore.libraries[0]?.library_id ?? '', provider: 'openai', model: 'gpt-4o', title: '' }
+  form.value = { doc_ids: [], provider: 'openai', model: 'gpt-4o', title: '' }
   showModal.value = true
 }
 
 async function createSession() {
-  if (!form.value.library_id) { createError.value = 'Choose a library first'; return }
+  if (!form.value.doc_ids.length) { createError.value = 'Select at least one document'; return }
   creating.value = true
   createError.value = null
   try {
     const sess = await sessStore.createSession({
-      library_id: form.value.library_id,
-      provider:   form.value.provider,
-      model:      form.value.model,
-      title:      form.value.title.trim() || undefined,
+      doc_ids:  form.value.doc_ids,
+      provider: form.value.provider,
+      model:    form.value.model,
+      title:    form.value.title.trim() || undefined,
     })
     showModal.value        = false
     sessionDrawerOpen.value = false
@@ -61,7 +64,7 @@ async function createSession() {
 }
 
 onMounted(async () => {
-  await Promise.all([sessStore.fetchSessions(), libStore.fetchLibraries()])
+  await Promise.all([sessStore.fetchSessions(), docStore.fetchDocuments()])
   if (!activeSessionId.value && sessStore.sessions.length) {
     activeSessionId.value = sessStore.sessions[0].session_id
   }
@@ -112,8 +115,8 @@ onMounted(async () => {
           </svg>
           New Chat
         </button>
-        <p v-if="!libStore.libraries.length" class="hint-warn">
-          No libraries yet — <RouterLink to="/libraries">create one first</RouterLink>.
+        <p v-if="!indexedDocs.length" class="hint-warn">
+          No indexed documents yet — <RouterLink to="/">upload a PDF first</RouterLink>.
         </p>
       </div>
     </div>
@@ -139,17 +142,17 @@ onMounted(async () => {
           </div>
 
           <div class="modal-body">
-            <!-- Library -->
+            <!-- Documents -->
             <div class="field">
-              <label class="field-label">Library <span class="required">*</span></label>
-              <select v-model="form.library_id" class="input">
-                <option value="" disabled>Choose a library…</option>
-                <option v-for="lib in libStore.libraries" :key="lib.library_id" :value="lib.library_id">
-                  {{ lib.name }} ({{ lib.documents.length }} docs)
-                </option>
-              </select>
-              <p v-if="!libStore.libraries.length" class="field-hint warn">
-                No libraries yet. <RouterLink to="/libraries">Create one first.</RouterLink>
+              <label class="field-label">Documents <span class="required">*</span></label>
+              <div v-if="indexedDocs.length" class="doc-picker">
+                <label v-for="doc in indexedDocs" :key="doc.doc_id" class="doc-option">
+                  <input v-model="form.doc_ids" type="checkbox" :value="doc.doc_id" />
+                  <span class="doc-option-name">{{ doc.name }}</span>
+                </label>
+              </div>
+              <p v-else class="field-hint warn">
+                No indexed documents yet. <RouterLink to="/">Upload a PDF first.</RouterLink>
               </p>
             </div>
 
@@ -189,7 +192,7 @@ onMounted(async () => {
 
           <div class="modal-footer">
             <button class="btn btn-ghost" @click="showModal = false">Cancel</button>
-            <button class="btn btn-primary" :disabled="creating || !form.library_id" @click="createSession">
+            <button class="btn btn-primary" :disabled="creating || !form.doc_ids.length" @click="createSession">
               <span v-if="creating" class="spinner" />
               Start chatting
             </button>
@@ -297,6 +300,24 @@ onMounted(async () => {
 .field-hint { font-size: .8rem; color: var(--text-muted); }
 .field-hint.warn { color: var(--clr-warn); }
 .field-hint a { color: var(--brand-purple); font-weight: 500; }
+
+/* Document multi-select */
+.doc-picker {
+  display: flex; flex-direction: column;
+  max-height: 180px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.doc-option {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px; cursor: pointer; font-size: .85rem;
+  border-bottom: 1px solid var(--border);
+}
+.doc-option:last-child { border-bottom: none; }
+.doc-option:hover { background: var(--bg-alt); }
+.doc-option input { cursor: pointer; }
+.doc-option-name {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .provider-grid { display: flex; gap: 8px; }
 .provider-btn {
