@@ -62,10 +62,11 @@ interface RagForm {
   reranker: 'none' | 'cross_encoder'
   rerank_top_n: number
 }
-// Defaults mirror backend RAGConfig.
-const rag = reactive<RagForm>({
+// Defaults mirror backend RAGConfig — single source for both init and seeding.
+const RAG_DEFAULTS: RagForm = {
   retriever: 'dense', hybrid_alpha: 0.5, top_k: 5, reranker: 'none', rerank_top_n: 3,
-})
+}
+const rag = reactive<RagForm>({ ...RAG_DEFAULTS })
 const isHybrid     = computed(() => rag.retriever === 'hybrid')
 const rerankActive = computed(() => rag.reranker !== 'none')
 
@@ -76,9 +77,9 @@ function num(cfg: Record<string, unknown>, key: string, fallback: number): numbe
 function seedRag(cfg: Record<string, unknown>) {
   rag.retriever    = cfg.retriever === 'hybrid' ? 'hybrid' : 'dense'
   rag.reranker     = cfg.reranker === 'cross_encoder' ? 'cross_encoder' : 'none'
-  rag.hybrid_alpha = num(cfg, 'hybrid_alpha', 0.5)
-  rag.top_k        = num(cfg, 'top_k', 5)
-  rag.rerank_top_n = num(cfg, 'rerank_top_n', 3)
+  rag.hybrid_alpha = num(cfg, 'hybrid_alpha', RAG_DEFAULTS.hybrid_alpha)
+  rag.top_k        = num(cfg, 'top_k', RAG_DEFAULTS.top_k)
+  rag.rerank_top_n = num(cfg, 'rerank_top_n', RAG_DEFAULTS.rerank_top_n)
 }
 
 // Reseed the form whenever a different library is selected.
@@ -93,9 +94,8 @@ async function saveRag() {
   ragSaved.value = false
   store.error = null
   try {
-    // Preserve any non-retrieval keys (e.g. upload-time chunker fields).
+    // Store merges these over the library's existing config (preserving chunker keys).
     await store.updateRagConfig(selectedLib.value.library_id, {
-      ...selectedLib.value.rag_config,
       retriever: rag.retriever,
       hybrid_alpha: rag.hybrid_alpha,
       top_k: rag.top_k,

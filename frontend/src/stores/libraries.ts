@@ -69,7 +69,12 @@ export const useLibrariesStore = defineStore('libraries', () => {
     if (idx !== -1) libraries.value[idx] = updated
   }
 
-  async function updateRagConfig(id: string, rag_config: Record<string, unknown>): Promise<void> {
+  // Merge `patch` over the library's existing rag_config so callers only pass
+  // the keys they changed — sibling keys (e.g. upload-time chunker fields) are
+  // preserved here rather than at every call site.
+  async function updateRagConfig(id: string, patch: Record<string, unknown>): Promise<void> {
+    const current = libraries.value.find(l => l.library_id === id)?.rag_config ?? {}
+    const rag_config = { ...current, ...patch }
     const res = await fetch(`/api/libraries/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

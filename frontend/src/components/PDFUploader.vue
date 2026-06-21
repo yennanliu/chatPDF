@@ -30,17 +30,19 @@ async function handleFiles(files: FileList | null) {
   // FileList, so resetting the input would empty it mid-loop (browse path).
   const selected = Array.from(files)
   if (fileInput.value) fileInput.value.value = ''
-  for (const file of selected) {
+  // Each upload is an independent POST — run them concurrently rather than
+  // serializing the round-trips.
+  await Promise.all(selected.map(async (file) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       store.error = `"${file.name}" is not a PDF — only .pdf files are accepted`
-      continue
+      return
     }
     uploadingNames.value.add(file.name)
     triggerRef(uploadingNames)
     await store.uploadDocument(file, { ...chunk })
     uploadingNames.value.delete(file.name)
     triggerRef(uploadingNames)
-  }
+  }))
 }
 
 function onDrop(e: DragEvent) {
