@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""WebSocket chat smoke test. Uses an existing indexed library."""
+"""WebSocket chat smoke test. Creates a session over all indexed documents."""
 import asyncio, json, sys
 import websockets
 
-LIBRARY_ID = "c85b5377-a415-4448-b628-db06f0290f45"
 BASE = "http://localhost:8000/api"
 WS_BASE = "ws://localhost:8000/ws"
 
 async def create_session() -> str:
-    import urllib.request, urllib.error
-    payload = json.dumps({"library_id": LIBRARY_ID, "provider": "google", "model": "gemini-2.0-flash-lite"}).encode()
+    import urllib.request
+    # Chat against every indexed document currently in the backend.
+    with urllib.request.urlopen(f"{BASE}/documents") as r:
+        docs = json.loads(r.read())
+    doc_ids = [d["doc_id"] for d in docs if d["status"] == "indexed"]
+    payload = json.dumps({
+        "doc_ids": doc_ids, "provider": "google", "model": "gemini-2.0-flash-lite",
+    }).encode()
     req = urllib.request.Request(f"{BASE}/sessions", data=payload,
                                   headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req) as r:

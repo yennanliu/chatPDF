@@ -66,7 +66,7 @@ Responsible for converting a PDF into searchable chunks stored in ChromaDB.
 ```
 upload PDF
     → PyMuPDF: extract text per page
-    → RecursiveCharacterTextSplitter: chunk (params from library's RAGConfig)
+    → RecursiveCharacterTextSplitter: chunk (params from the session's RAGConfig)
     → embed each chunk (batch call to embedding model)
     → upsert into ChromaDB collection keyed by document_id
     → record document metadata in SQLite
@@ -121,45 +121,41 @@ Persists every message (user + assistant) to SQLite. On session reload:
 One WebSocket connection per active chat tab (`/ws/chat/{session_id}`).
 
 ```
-client → { "query": "...", "library_id": "...", "provider": "openai", "model": "gpt-4o" }
+client → { "query": "..." }   (session carries doc_ids, provider, model, rag_config)
 server → { "type": "token", "data": "Hello" }   (repeated)
 server → { "type": "done",  "sources": [...] }   (final frame with citations)
 server → { "type": "error", "detail": "..." }    (on failure)
 ```
 
-### 2.6 Library — PDF Group Concept
+### 2.6 Sessions own their documents
 
-A **Library** is a named, reusable collection of documents. Sessions bind to a Library rather than to raw document IDs — so the same group of PDFs can power multiple independent chat sessions, and membership can be updated without touching existing sessions.
+A chat **Session** directly owns the set of documents it covers and its own `RAGConfig`. Both are chosen at session-creation time: the client passes a `doc_ids` list (which indexed documents to chat against) and an optional `rag_config` override. There is no shared "library" entity — the same indexed document can simply be referenced by many sessions, each with its own scope and tuning.
 
 ```
-┌──────────────────────────────────────┐
-│              Library                 │
-│  name: "Research Papers Q1"          │
-│  rag_config: { chunk_size: 600, ... }│
-│                                      │
-│  documents:                          │
-│    ├── paper_a.pdf                   │
-│    ├── paper_b.pdf                   │
-│    └── report_c.pdf                  │
-└──────────────────┬───────────────────┘
-                   │  referenced by
-       ┌───────────┴───────────┐
-       │  Session A            │  Session B
-       │  "Deep-dive chat"     │  "Quick summary"
-       └───────────────────────┘
+Uploaded documents (indexed once)
+  paper_a.pdf   paper_b.pdf   report_c.pdf
+        │             │              │
+        └──────┬──────┘              │
+               ▼                     ▼
+        ┌──────────────────┐  ┌──────────────────┐
+        │   Session A       │  │   Session B       │
+        │  "Deep-dive chat" │  │  "Quick summary"  │
+        │  doc_ids: a, b    │  │  doc_ids: c       │
+        │  rag_config:{...}  │  │  rag_config:{...}  │
+        └──────────────────┘  └──────────────────┘
 ```
 
 Design rules:
-- A document can belong to many libraries (many-to-many join table).
-- Deleting a library does **not** delete its documents — documents are standalone assets.
-- Deleting a document removes it from all libraries and its ChromaDB vectors.
-- Each Library carries its own `RAGConfig` — different collections can have different chunk sizes, retrievers, etc.
+- A document can be referenced by many sessions (`session_document` many-to-many join table).
+- Deleting a session does **not** delete its documents — documents are standalone assets.
+- Deleting a document removes it from all sessions (cascade) and drops its ChromaDB vectors.
+- Each Session carries its own `RAGConfig` — different sessions can use different retrievers, `top_k`, rerankers, etc.
 
 ### 2.7 RAG Pipeline — Extensibility Design
 
 The RAG pipeline is built around a `RAGConfig` dataclass and abstract plugin interfaces so any component can be swapped without modifying the LangGraph graph.
 
-**`RAGConfig`** (stored per Library as JSON in SQLite):
+**`RAGConfig`** (stored per Session as JSON in SQLite):
 
 ```python
 @dataclass
@@ -221,25 +217,14 @@ Adding a new strategy = write one subclass + one registry entry. No graph change
 | GET    | `/api/documents`            | List all documents                 |
 | DELETE | `/api/documents/{doc_id}`   | Delete doc + its vectors + chunks  |
 
-#### Libraries (PDF Groups)
-| Method | Path                                        | Description                          |
-|--------|---------------------------------------------|--------------------------------------|
-| POST   | `/api/libraries`                            | Create library                       |
-| GET    | `/api/libraries`                            | List libraries                       |
-| GET    | `/api/libraries/{library_id}`               | Library detail + document list       |
-| PATCH  | `/api/libraries/{library_id}`               | Rename or update `rag_config`        |
-| DELETE | `/api/libraries/{library_id}`               | Delete library (documents stay)      |
-| POST   | `/api/libraries/{library_id}/documents`     | Add document to library              |
-| DELETE | `/api/libraries/{library_id}/documents/{doc_id}` | Remove document from library   |
-
 #### Sessions
-| Method | Path                              | Description                   |
-|--------|-----------------------------------|-------------------------------|
-| POST   | `/api/sessions`                   | Create new session            |
-| GET    | `/api/sessions`                   | List sessions (title, date)   |
-| GET    | `/api/sessions/{session_id}`      | Session detail + messages     |
-| PATCH  | `/api/sessions/{session_id}`      | Rename session title          |
-| DELETE | `/api/sessions/{session_id}`      | Delete session + messages     |
+| Method | Path                              | Description                                          |
+|--------|-----------------------------------|------------------------------------------------------|
+| POST   | `/api/sessions`                   | Create session — binds `doc_ids`, `provider`, `model`, optional `rag_config` |
+| GET    | `/api/sessions`                   | List sessions (title, date)                          |
+| GET    | `/api/sessions/{session_id}`      | Session detail + documents + `rag_config` + messages |
+| PATCH  | `/api/sessions/{session_id}`      | Rename session title                                 |
+| DELETE | `/api/sessions/{session_id}`      | Delete session + messages                            |
 
 #### WebSocket
 | Path                          | Description                           |
@@ -252,20 +237,12 @@ Adding a new strategy = write one subclass + one registry entry. No graph change
 POST /api/documents/upload
   → 201 { doc_id, name, page_count, status: "indexed" }
 
-POST /api/libraries
-  body: { name: string, description?: string, rag_config?: RAGConfig }
-  → 201 { library_id, name, rag_config, created_at }
-
-POST /api/libraries/{id}/documents
-  body: { doc_id: string }
-  → 200 { library_id, documents: [...] }
-
 POST /api/sessions
-  body: { title?: string, library_id: string, provider: string, model: string }
-  → 201 { session_id, title, library_id, created_at }
+  body: { title?: string, doc_ids: string[], provider: string, model: string, rag_config?: RAGConfig }
+  → 201 { session_id, title, provider, model, documents: [{ doc_id, name, status }], rag_config, created_at }
 
 GET /api/sessions/{id}
-  → 200 { session_id, title, provider, model, library: { id, name, documents }, messages: [{ role, content, sources, created_at }] }
+  → 200 { session_id, title, provider, model, documents: [{ doc_id, name, status }], rag_config, messages: [{ role, content, sources, created_at }] }
 ```
 
 ---
@@ -285,32 +262,23 @@ CREATE TABLE document (
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- libraries (PDF groups)
-CREATE TABLE library (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    description TEXT,
-    rag_config  TEXT NOT NULL DEFAULT '{}',  -- JSON: RAGConfig overrides
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- many-to-many: library ↔ document
-CREATE TABLE library_document (
-    library_id  TEXT NOT NULL REFERENCES library(id)  ON DELETE CASCADE,
-    document_id TEXT NOT NULL REFERENCES document(id) ON DELETE CASCADE,
-    added_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (library_id, document_id)
-);
-
--- chat sessions (bind to a library, not raw doc list)
+-- chat sessions (own their doc set + RAGConfig)
 CREATE TABLE session (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL DEFAULT 'New Chat',
-    library_id  TEXT NOT NULL REFERENCES library(id),
+    rag_config  TEXT NOT NULL DEFAULT '{}',  -- JSON: RAGConfig overrides
     provider    TEXT NOT NULL,        -- openai | google | anthropic
     model       TEXT NOT NULL,        -- gpt-4o | gemini-1.5-pro | claude-sonnet-4-6
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- many-to-many: session ↔ document (doc set chosen at session creation)
+CREATE TABLE session_document (
+    session_id  TEXT NOT NULL REFERENCES session(id)  ON DELETE CASCADE,
+    document_id TEXT NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    added_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (session_id, document_id)
 );
 
 -- messages
@@ -408,8 +376,8 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 - [x] **[TDD]** Test: `POST /api/documents/upload` returns 201 with `doc_id`
 - [x] FastAPI scaffold: `main.py`, routers, SQLModel models, DB init
 - [x] PDF upload endpoint + PyMuPDF text extraction + ChromaDB upsert
-- [x] **[TDD]** Test: library CRUD (create, list, add doc, remove doc)
-- [x] Library + Library–Document endpoints
+- [x] **[TDD]** Test: document CRUD (upload, list, status, delete)
+- [x] Document endpoints + status polling
 > **20 tests, 0.24s** — commit `4f3bf86`
 
 ### Phase 2 — Core RAG + Chat BE ✅ DONE
@@ -426,11 +394,11 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 ### Phase 3 — Multi-LLM + RAG Variants ✅ DONE
 - [x] **[TDD]** Test: `LLMGateway.get_llm` returns correct adapter per provider
 - [x] LangChain adapters for Gemini + Claude (module-level imports for patchability)
-- [x] **[TDD]** Test: two sessions on same library get independent histories
+- [x] **[TDD]** Test: two sessions over the same docs get independent histories
 - [x] Cross-collection Chroma search; source citations in response
-- [x] **[TDD]** Test: `RAGConfig` on library overrides `top_k` at runtime
-- [x] **[TDD]** Test: delete document cascades vectors + library memberships
-- [x] Document delete, session delete, library delete/rename
+- [x] **[TDD]** Test: `RAGConfig` on session overrides `top_k` at runtime
+- [x] **[TDD]** Test: delete document cascades vectors + session memberships
+- [x] Document delete, session delete/rename
 - [x] FK CASCADE enforced via SQLite pragma + `ondelete="CASCADE"` on all FK columns
 - [x] Reranker applied in `run_rag_stream` when `rag_config.reranker != "none"`
 > **67 tests, 0.64s** — all cascade, citation-shape, cross-collection, and provider-routing tests green
@@ -450,15 +418,12 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 
 ### ── FRONTEND ─────────────────────────────────────────
 
-### Phase 5 — FE Skeleton + Document/Library UI ✅ DONE
+### Phase 5 — FE Skeleton + Document UI ✅ DONE
 - [x] Vue 3 + Pinia + Vue Router + TypeScript + Vite — `npm run dev` at `http://localhost:5173`
 - [x] `stores/documents.ts` — upload (BackgroundTasks), list, delete, status polling
-- [x] `stores/libraries.ts` — full CRUD + doc membership (add/remove)
-- [x] `stores/sessions.ts` — fetch, create, rename, delete (wired in Phase 6)
+- [x] `stores/sessions.ts` — fetch, create (with `doc_ids` + `rag_config`), rename, delete (wired in Phase 6)
 - [x] `PDFUploader.vue` — drag-drop zone, status badges (pending spinner → indexed/error), delete
-- [x] `LibrariesView.vue` — two-panel: library list with create/rename/delete + detail panel
-- [x] `LibraryPicker.vue` — "In this library" / "Available" two-section doc management
-- [x] `ChatView.vue` — stub showing available libraries; full UI in Phase 6
+- [x] `ChatView.vue` — stub showing indexed documents; full UI in Phase 6
 - [x] CORS middleware added to FastAPI for `http://localhost:5173`
 - [x] Vite proxy: `/api` → `http://localhost:8000`, `/ws` → `ws://localhost:8000`
 - [x] `npm run build` passes (TypeScript + Vite bundle, 113 kB)
@@ -468,14 +433,14 @@ Test stack: `pytest` + `pytest-asyncio` (async route/WS tests) + `httpx.AsyncCli
 - [x] `ChatWindow.vue` — loads history via `GET /api/sessions/{id}` on session select, auto-scrolls, Enter-to-send (Shift+Enter = newline), streaming send-button spinner
 - [x] `MessageBubble.vue` — user (right/blue) and assistant (left/white) bubbles; blinking cursor while streaming; collapsible source citations with score colour-coding
 - [x] `SessionSidebar.vue` — session list with inline rename / delete; active highlight; "New" button
-- [x] Session create modal — library dropdown, provider toggle (OpenAI/Google/Anthropic), model selector per provider, optional title; auto-selects most-recent session on page load
+- [x] Session create modal — multi-select document picker, provider toggle (OpenAI/Google/Anthropic), model selector per provider, optional title + `rag_config`; auto-selects most-recent session on page load
 - [x] `npm run build` passes (TypeScript + Vite, 134 kB)
 
 ### Phase 7 — Integration Polish ✅ DONE
-- [x] **E2E tests** (`tests/integration/test_e2e_flow.py`) — 5 new tests: full happy path (upload→index→library→session→2 chat turns→history reload→rename), status polling transition, WS error on unknown session, empty-library chat, cascade delete; total **98 tests**, 0.73 s
+- [x] **E2E tests** (`tests/integration/test_e2e_flow.py`) — 5 new tests: full happy path (upload→index→session-with-docs→2 chat turns→history reload→rename), status polling transition, WS error on unknown session, empty-doc-set chat, cascade delete; total **98 tests**, 0.73 s
 - [x] **Error states** — WS disconnect: amber reconnect banner in `ChatWindow.vue` with one-click reconnect; upload failure: "uploading" vs "indexing" phases differentiated; LLM/backend errors surface as error frames in chat bubble
 - [x] **Upload progress** — three visible phases: `uploading` badge (POST in-flight) → `indexing` badge + spinner (pending, polling at 1.5 s) → `indexed` green badge; "pending" relabelled "indexing" in the display layer
-- [x] **Responsive layout** — `App.vue`: hamburger toggle slides in the nav drawer on mobile (≤ 768 px); `ChatView.vue`: session panel becomes a slide-in drawer with "Sessions" CTA button; `LibrariesView.vue`: two-panel grid collapses to single column; `DocumentsView.vue`: padding reduced on mobile; `npm run build` passes (137 kB)
+- [x] **Responsive layout** — `App.vue`: hamburger toggle slides in the nav drawer on mobile (≤ 768 px); `ChatView.vue`: session panel becomes a slide-in drawer with "Sessions" CTA button; `DocumentsView.vue`: padding reduced on mobile; `npm run build` passes (137 kB)
 
 ---
 
@@ -494,8 +459,7 @@ chatpdf/
 │   ├── main.py                      # FastAPI app, Swagger config, WS registration
 │   ├── routers/
 │   │   ├── documents.py
-│   │   ├── libraries.py             # Library CRUD + document membership
-│   │   ├── sessions.py
+│   │   ├── sessions.py              # session CRUD + doc_ids + rag_config
 │   │   └── chat_ws.py
 │   ├── services/
 │   │   ├── ingestion.py             # PDF → chunks → ChromaDB (uses RAGConfig)
@@ -520,7 +484,6 @@ chatpdf/
 │       │   └── test_ingestion.py    # chunk + embed pipeline
 │       └── integration/
 │           ├── test_documents_api.py
-│           ├── test_libraries_api.py
 │           ├── test_sessions_api.py
 │           └── test_chat_ws.py      # WS token stream + done frame
 │
@@ -533,11 +496,9 @@ chatpdf/
 │   │   │   ├── ChatWindow.vue
 │   │   │   ├── MessageBubble.vue
 │   │   │   ├── SessionSidebar.vue
-│   │   │   ├── LibraryPicker.vue    # choose/create library when starting session
 │   │   │   └── PDFUploader.vue
 │   │   ├── stores/
 │   │   │   ├── sessions.ts
-│   │   │   ├── libraries.ts
 │   │   │   └── documents.ts
 │   │   └── composables/
 │   │       └── useChatSocket.ts     # WebSocket logic

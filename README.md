@@ -1,6 +1,6 @@
 # ChatPDF
 
-> RAG-powered multi-PDF chat — upload documents into named Libraries, ask questions, and get streaming answers with source citations backed by any major LLM.
+> RAG-powered multi-PDF chat — upload documents, pick which ones to chat against per conversation, and get streaming answers with source citations backed by any major LLM.
 
 [![CI](https://github.com/yennanliu/chatPDF/actions/workflows/ci.yml/badge.svg)](https://github.com/yennanliu/chatPDF/actions/workflows/ci.yml)
 
@@ -8,16 +8,18 @@
 
 ## Core idea
 
-Most "chat with PDF" tools let you chat against a single document. ChatPDF introduces **Libraries** — named, reusable collections of documents. Each Library has its own RAG configuration and can power any number of independent chat sessions:
+Most "chat with PDF" tools let you chat against a single document. ChatPDF lets you upload many PDFs once, then **pick exactly which indexed documents a chat session covers** when you start it. Each session owns its own document set *and* its own RAG configuration, so different conversations over the same library of uploads can be scoped and tuned independently:
 
 ```
-Library "Research Q1"               Library "Legal Contracts"
-  ├── paper_a.pdf                     ├── contract_2024.pdf
-  ├── paper_b.pdf                     └── amendment.pdf
-  └── report_c.pdf
-        │                                    │
-  Session A        Session B          Session C
-  "Deep-dive"      "Quick summary"    "Key clauses"
+Uploaded documents (indexed once)
+  paper_a.pdf   paper_b.pdf   report_c.pdf   contract_2024.pdf   amendment.pdf
+        │             │              │               │                │
+        └──────┬──────┘              │               └───────┬────────┘
+               ▼                     ▼                        ▼
+        Session A             Session C                Session D
+        "Deep-dive"           "Quick summary"          "Key clauses"
+        docs: a, b            docs: c                  docs: contract, amendment
+        rag_config: {...}     rag_config: {...}        rag_config: {...}
 ```
 
 All sessions persist full message history. Reload any session to continue exactly where you left off.
@@ -39,8 +41,8 @@ All sessions persist full message history. Reload any session to continue exactl
           ┌──────────────────▼──────────────────────────┐
           │                FastAPI                       │
           │                                              │
-          │  /api/documents   /api/libraries             │
-          │  /api/sessions    /ws/chat/{session_id}      │
+          │  /api/documents   /api/sessions              │
+          │  /ws/chat/{session_id}                       │
           │                                              │
           │  ┌──────────────┐  ┌──────────────────────┐ │
           │  │  Ingestion   │  │   RAG (LangGraph)    │ │
@@ -186,10 +188,9 @@ The Vite dev server proxies `/api` and `/ws` to the backend automatically — no
 | Step | Where | What to do |
 |---|---|---|
 | 1 | **Documents** | Drop PDF files onto the upload zone. Watch the badge transition: `uploading → indexing → indexed`. |
-| 2 | **Libraries** | Create a named Library. Select it and add indexed documents using the picker. |
-| 3 | **Chat → New Chat** | Pick a Library, choose your provider + model, optionally name the session. Click **Create Session**. |
-| 4 | Chat | Type a question and press Enter. Tokens stream in real time. Expand the **sources** chip to see citations. |
-| 5 | Reload | Click any past session in the sidebar to restore full history and continue chatting. |
+| 2 | **Chat → New Chat** | Multi-select which indexed documents to chat against, choose your provider + model, optionally name the session and tweak its RAG config. Click **Create Session**. |
+| 3 | Chat | Type a question and press Enter. Tokens stream in real time. Expand the **sources** chip to see citations. |
+| 4 | Reload | Click any past session in the sidebar to restore full history and continue chatting. |
 
 ---
 
@@ -203,12 +204,9 @@ Full interactive docs at **[http://localhost:8000/docs](http://localhost:8000/do
 |---|---|---|
 | `POST` | `/api/documents/upload` | Upload PDF → returns `status: pending`; poll `/status` |
 | `GET` | `/api/documents/{id}/status` | Returns `{status, page_count}` — poll until `indexed` |
-| `DELETE` | `/api/documents/{id}` | Delete doc + vectors + library memberships (cascade) |
-| `POST` | `/api/libraries` | Create library; accepts optional `rag_config` override |
-| `PATCH` | `/api/libraries/{id}` | Rename or update RAG config |
-| `POST` | `/api/libraries/{id}/documents` | Add document to library |
-| `POST` | `/api/sessions` | Create session — binds `library_id`, `provider`, `model` |
-| `GET` | `/api/sessions/{id}` | Session detail + full message history |
+| `DELETE` | `/api/documents/{id}` | Delete doc + vectors + session memberships (cascade) |
+| `POST` | `/api/sessions` | Create session — binds `doc_ids`, `provider`, `model`, optional `rag_config` |
+| `GET` | `/api/sessions/{id}` | Session detail + documents + `rag_config` + full message history |
 
 ### WebSocket chat protocol
 
@@ -228,7 +226,7 @@ sources: [{ doc_name: string, chunk_preview: string, score: float }]
 
 ## RAG configuration
 
-Each Library stores a `rag_config` JSON that overrides defaults at query time:
+Each session stores a `rag_config` JSON (set in the **New Chat** dialog at session creation) that overrides defaults at query time:
 
 ```json
 {
@@ -314,11 +312,11 @@ GitHub Actions runs on every push and PR:
 
 | Phase | What was built |
 |---|---|
-| 1 — BE Skeleton | FastAPI scaffold, SQLModel tables, ChromaDB, PDF upload, Library CRUD (20 tests) |
+| 1 — BE Skeleton | FastAPI scaffold, SQLModel tables, ChromaDB, PDF upload, document CRUD (20 tests) |
 | 2 — Core RAG + Chat BE | LangGraph pipeline, WebSocket streaming, session CRUD, plugin system (49 tests) |
 | 3 — Multi-LLM + RAG Variants | Gemini/Claude adapters, FK cascades, reranker, cross-collection search (67 tests) |
 | 4 — BE Validation Gate | 100% services coverage, BackgroundTasks upload, status polling (93 tests) |
-| 5 — FE Skeleton | Vue 3 + Pinia + Router, Documents + Libraries UI, responsive Vite proxy setup |
+| 5 — FE Skeleton | Vue 3 + Pinia + Router, Documents UI, responsive Vite proxy setup |
 | 6 — Chat UI | WebSocket composable, streaming bubbles, source citations, session sidebar + modal |
 | 7 — Integration Polish | E2E tests, error/reconnect states, upload progress UX, responsive layout, CI/CD, docs (98 tests) |
 
@@ -334,7 +332,7 @@ chatpdf/
 │   ├── db.py                  ← SQLite engine + FK PRAGMA
 │   ├── vector_store.py        ← ChromaDB wrapper (injectable for tests)
 │   ├── models/tables.py       ← SQLModel ORM tables
-│   ├── routers/               ← documents, libraries, sessions, chat_ws
+│   ├── routers/               ← documents, sessions, chat_ws
 │   ├── services/
 │   │   ├── ingestion.py       ← PDF → chunks → ChromaDB
 │   │   ├── rag.py             ← LangGraph pipeline
@@ -349,11 +347,11 @@ chatpdf/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── stores/            ← Pinia: documents, libraries, sessions
+│   │   ├── stores/            ← Pinia: documents, sessions
 │   │   ├── composables/       ← useChatSocket (WebSocket lifecycle)
-│   │   ├── components/        ← PDFUploader, LibraryPicker, ChatWindow,
+│   │   ├── components/        ← PDFUploader, ChatWindow,
 │   │   │                           MessageBubble, SessionSidebar
-│   │   └── views/             ← DocumentsView, LibrariesView, ChatView
+│   │   └── views/             ← DocumentsView, ChatView
 │   └── eslint.config.js
 │
 ├── .github/workflows/ci.yml   ← GitHub Actions (lint + test + build)

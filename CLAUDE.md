@@ -1,6 +1,6 @@
 # ChatPDF
 
-RAG-powered multi-PDF chat app. Upload PDFs into named Libraries, chat against them with streaming LLM responses.
+RAG-powered multi-PDF chat app. Upload PDFs, then start a chat session against any subset of them with streaming LLM responses.
 
 Design doc: [`doc/system_design.md`](doc/system_design.md) | Extension guide: [`doc/extending.md`](doc/extending.md)
 
@@ -79,8 +79,7 @@ Always commit `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 | `backend/services/chat_history.py` | SQLite message read/write |
 | `backend/services/plugins/` | Chunker / Embedder / Retriever / Reranker plugins |
 | `backend/routers/documents.py` | `POST /api/documents/upload`, `GET`, `GET /{id}/status`, `DELETE` |
-| `backend/routers/libraries.py` | Library CRUD + document membership |
-| `backend/routers/sessions.py` | Session CRUD |
+| `backend/routers/sessions.py` | Session CRUD — each session owns its `doc_ids` + `rag_config` |
 | `backend/routers/chat_ws.py` | `WS /ws/chat/{session_id}` — streaming chat |
 | `backend/tests/conftest.py` | Fixtures: `client`, `ws_client`, `test_vs`, `FakeLLMGateway` |
 
@@ -112,7 +111,7 @@ SQLITE_URL=sqlite:///../chatpdf.db
 { "type": "error",  "detail": "..." }     ← on failure
 ```
 
-Session (`session_id` in URL) carries `library_id`, `provider`, `model` — client only sends the query.
+Session (`session_id` in URL) carries its `doc_ids`, `rag_config`, `provider`, `model` — client only sends the query.
 
 ---
 

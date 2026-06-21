@@ -166,7 +166,7 @@ only the LLM-judge half needs real keys, so keep it opt-in (`--judge`).
 Measurement first, because it makes everything else decidable.
 
 1. **Eval harness + gold set (§4–5)** — unblocks every tuning decision; do this first.
-2. **Cross-encoder reranking as a default** for quality-sensitive libraries —
+2. **Cross-encoder reranking as a default** for quality-sensitive sessions/collections —
    already implemented (`rerankers.py`), just not on by default; biggest precision win.
 3. **Relevance / score floor** — the design's skipped "grade" step
    (`system_design.md` §9); drop chunks below a similarity threshold to cut noise

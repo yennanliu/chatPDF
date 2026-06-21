@@ -14,7 +14,7 @@
 ## 1. Shipped — Configurable Chunking + Semantic Chunker
 
 **Problem.** Chunking config was dead wiring. `ingest_document` hardcoded
-`RecursiveChunker(chunk_size=800, chunk_overlap=100)` and ignored the library's
+`RecursiveChunker(chunk_size=800, chunk_overlap=100)` and ignored the upload's
 `RAGConfig`, so tuning chunk size/overlap or selecting a chunker had **no
 effect**, and the `"semantic"` chunker advertised in the design doc didn't exist.
 
@@ -35,11 +35,11 @@ percentile threshold (a *topic shift*). `chunk_size` is a hard character cap so
 a long run of similar sentences never grows a chunk unbounded. Falls back to a
 single chunk when there are ≤ 1 sentences.
 
-**Design decision — chunking is an upload-time choice, not a library-time one.**
+**Design decision — chunking is an upload-time choice, not a session-time one.**
 Documents are ingested once into a per-document Chroma collection *before* they
-join any library, and one document can belong to several libraries. A
-library-level chunk config therefore can't apply without re-indexing the
-vectors. Chunk config lives at upload; re-upload to re-chunk.
+are attached to any session, and one document can be referenced by several
+sessions. A session-level chunk config therefore can't apply without re-indexing
+the vectors. Chunk config lives at upload; re-upload to re-chunk.
 
 ### Tuning guidance
 
@@ -74,8 +74,8 @@ fused = alpha * dense_norm + (1 - alpha) * sparse_norm   # alpha = RAGConfig.hyb
 - Candidates are the full chunk corpus for the docs in scope; both score sets
   are min-max normalized to `[0,1]` then blended. `alpha=1.0` is pure dense,
   `alpha=0.0` is pure sparse; the `RAGConfig` default `0.5` weights them evenly.
-- Set per library via `retriever: "hybrid"` + `hybrid_alpha` in its `RAGConfig`
-  (PATCH `/api/libraries/{id}`).
+- Set per session via `retriever: "hybrid"` + `hybrid_alpha` in the session's
+  `rag_config` at creation (`POST /api/sessions`).
 - **Cost note:** BM25 is rebuilt per query over the in-scope corpus (one
   `col.get()` + tokenize per doc). Fine at this app's single-user scale; for
   large corpora, persist the sparse index or switch fusion to **RRF**
@@ -86,8 +86,9 @@ fused = alpha * dense_norm + (1 - alpha) * sparse_norm   # alpha = RAGConfig.hyb
 `CrossEncoderReranker` is implemented and wired in `run_rag_stream`, but it's
 never the default. Pattern: retrieve a wide net (`top_k=20`), rerank with a
 cross-encoder, keep `rerank_top_n=3-5`. This is usually the single biggest
-precision win. Action: surface `reranker` / `rerank_top_n` in the library
-config UI and document the cost (a model download + per-query inference).
+precision win. Action: surface `reranker` / `rerank_top_n` in the session's
+RAG-config UI (New Chat dialog) and document the cost (a model download +
+per-query inference).
 
 ### 2.3 Query transformation — **medium impact**
 

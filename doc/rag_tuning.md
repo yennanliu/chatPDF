@@ -12,7 +12,7 @@
 The whole pipeline is driven by one dataclass, `RAGConfig`
 (`backend/services/rag_config.py`), selected at runtime through plugin
 registries. Two knobs are **per-document, set at upload time**; the rest are
-**per-library, set on the Library's `rag_config`**.
+**per-session, set on the Session's `rag_config`**.
 
 ```python
 @dataclass
@@ -22,12 +22,12 @@ class RAGConfig:
     chunk_overlap: int  = 100
     chunker: str        = "recursive"   # recursive | sentence | semantic
 
-    # retrieval — applied at QUERY time (per library)
+    # retrieval — applied at QUERY time (per session)
     top_k: int          = 5
     retriever: str      = "dense"       # dense | hybrid
     hybrid_alpha: float = 0.5           # 1.0 = pure dense, 0.0 = pure sparse
 
-    # reranking — applied at QUERY time (per library)
+    # reranking — applied at QUERY time (per session)
     reranker: str       = "none"        # none | cross_encoder
     rerank_top_n: int   = 3
 
@@ -35,14 +35,14 @@ class RAGConfig:
     embedder: str       = "local"       # local | openai
 ```
 
-### Why chunking is upload-time, not library-time
+### Why chunking is upload-time, not session-time
 
 A document is parsed and embedded **once**, into a per-document ChromaDB
-collection (`doc_{id}`), *before* it joins any library — and one document can
-belong to several libraries. So chunk geometry is fixed when the vectors are
-written; a library-level chunk setting could not apply without re-indexing.
-**Chunking is chosen at upload; re-upload to re-chunk.** Retrieval and reranking,
-by contrast, run fresh on every query and are owned by the library.
+collection (`doc_{id}`), *before* it is attached to any session — and one
+document can be referenced by several sessions. So chunk geometry is fixed when
+the vectors are written; a session-level chunk setting could not apply without
+re-indexing. **Chunking is chosen at upload; re-upload to re-chunk.** Retrieval
+and reranking, by contrast, run fresh on every query and are owned by the session.
 
 ---
 
@@ -70,8 +70,8 @@ as form fields on `POST /api/documents/upload`
 
 ## 3. Retrieval (query time)
 
-Set in the **"Retrieval settings"** panel of the library detail view
-(`LibrariesView.vue`), or via `PATCH /api/libraries/{id}` with a `rag_config`.
+Set in the **"RAG config"** section of the Chat **New Chat** dialog
+(`ChatView.vue`), as part of the session's `rag_config` at `POST /api/sessions`.
 
 ### `retriever`
 

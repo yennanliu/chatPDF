@@ -74,5 +74,5 @@ required.
 
 Copy `upload-smoke.mjs` and swap step 2 for your action — e.g. drive the chat
 WebSocket by typing a query and asserting `type:"token"` frames arrive, or
-exercise library CRUD. Keep the four `page.on(...)` listeners; they are the
-reusable core.
+exercise the New Chat dialog's document picker and session creation. Keep the
+four `page.on(...)` listeners; they are the reusable core.
