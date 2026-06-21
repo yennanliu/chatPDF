@@ -15,9 +15,10 @@ from pathlib import Path
 # Allow running as `python scripts/...` from the backend dir.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sqlalchemy import inspect  # noqa: E402
+
 import models.tables  # noqa: E402,F401 — registers tables on SQLModel.metadata
 from db import engine, init_db  # noqa: E402
-from sqlalchemy import inspect  # noqa: E402
 
 
 def main() -> None:
