@@ -20,6 +20,7 @@ from pathlib import Path
 # Allow running as `python scripts/...` from the backend dir.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import models.tables  # noqa: E402,F401 — registers tables on SQLModel.metadata
 from config import settings  # noqa: E402
 from db import init_db  # noqa: E402
 

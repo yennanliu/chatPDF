@@ -115,6 +115,14 @@ def list_sessions(db: DBSession = Depends(get_db)):
     return [_session_out(s, _session_docs(s.id, db)) for s in rows]
 
 
+@router.delete("", status_code=204)
+def delete_all_sessions(db: DBSession = Depends(get_db)):
+    """Delete every session (messages + document links cascade)."""
+    for s in db.exec(select(SessionModel)).all():
+        db.delete(s)
+    db.commit()
+
+
 @router.get("/{session_id}", response_model=SessionDetailOut)
 def get_session(session_id: str, db: DBSession = Depends(get_db)):
     s = db.get(SessionModel, session_id)

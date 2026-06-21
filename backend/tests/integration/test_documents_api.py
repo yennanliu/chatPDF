@@ -108,6 +108,25 @@ async def test_upload_initial_response_is_pending(client, sample_pdf):
 
 # ── delete cascade tests (Phase 3) ───────────────────────────────────────────
 
+async def test_delete_all_documents(client, sample_pdf):
+    """DELETE /api/documents removes every document."""
+    for n in ("a.pdf", "b.pdf"):
+        await client.post(
+            "/api/documents/upload",
+            files={"file": (n, sample_pdf, "application/pdf")},
+        )
+    assert len((await client.get("/api/documents")).json()) == 2
+
+    r = await client.delete("/api/documents")
+    assert r.status_code == 204
+    assert (await client.get("/api/documents")).json() == []
+
+
+async def test_delete_all_documents_empty_ok(client):
+    r = await client.delete("/api/documents")
+    assert r.status_code == 204
+
+
 async def test_delete_doc_removes_chroma_collection(client, test_vs, sample_pdf):
     """Deleting a document removes its ChromaDB collection."""
     resp = await client.post(

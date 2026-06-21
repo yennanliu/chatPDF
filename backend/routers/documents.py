@@ -117,6 +117,24 @@ def list_documents(db: Session = Depends(get_db)):
     return [_doc_out(d) for d in docs]
 
 
+@router.delete("", status_code=204)
+def delete_all_documents(
+    db: Session = Depends(get_db),
+    vs: VectorStore = Depends(get_vector_store),
+):
+    """Delete every document — vectors, files, and rows (session links cascade)."""
+    docs = db.exec(select(Document)).all()
+    logger.info("delete-all start: %d documents", len(docs))
+    for doc in docs:
+        vs.delete_document(doc.id)
+        dest = Path(doc.file_path)
+        if dest.exists():
+            dest.unlink()
+        db.delete(doc)
+    db.commit()
+    logger.info("delete-all done: %d documents removed", len(docs))
+
+
 @router.get("/{doc_id}/status", response_model=DocumentStatusOut)
 def get_document_status(doc_id: str, db: Session = Depends(get_db)):
     doc = db.get(Document, doc_id)

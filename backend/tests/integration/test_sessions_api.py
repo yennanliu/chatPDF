@@ -131,6 +131,21 @@ async def test_delete_session(client, sample_pdf):
     assert r.status_code == 404
 
 
+async def test_delete_all_sessions(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    await _make_session(client, [doc_id], "A")
+    await _make_session(client, [doc_id], "B")
+
+    r = await client.delete("/api/sessions")
+    assert r.status_code == 204
+    assert (await client.get("/api/sessions")).json() == []
+
+
+async def test_delete_all_sessions_empty_ok(client):
+    r = await client.delete("/api/sessions")
+    assert r.status_code == 204
+
+
 async def test_two_sessions_share_docs_independently(client, sample_pdf):
     doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
     s1 = await _make_session(client, [doc_id], "Chat A")

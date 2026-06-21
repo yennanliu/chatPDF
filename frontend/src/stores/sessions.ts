@@ -96,8 +96,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (activeSession.value?.session_id === id) activeSession.value = null
   }
 
+  async function deleteAllSessions(): Promise<void> {
+    const res = await fetch('/api/sessions', { method: 'DELETE' })
+    if (!res.ok && res.status !== 404) throw new Error(res.statusText)
+    sessions.value = []
+    activeSession.value = null
+  }
+
   return {
     sessions, activeSession, loading, error,
-    fetchSessions, fetchSession, createSession, renameSession, deleteSession,
+    fetchSessions, fetchSession, createSession, renameSession, deleteSession, deleteAllSessions,
   }
 })

@@ -108,7 +108,22 @@ export const useDocumentsStore = defineStore('documents', () => {
     }
   }
 
-  return { documents, loading, error, fetchDocuments, uploadDocument, deleteDocument }
+  async function deleteAllDocuments(): Promise<void> {
+    error.value = null
+    documents.value.forEach(d => _cancelledPolls.add(d.doc_id))  // stop in-flight polls
+    console.info('[documents] delete-all start')
+    try {
+      const res = await fetch('/api/documents', { method: 'DELETE' })
+      if (!res.ok && res.status !== 404) throw new Error(await res.text() || res.statusText)
+      documents.value = []
+      console.info('[documents] delete-all ok')
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : String(e)
+      console.error('[documents] delete-all failed:', error.value)
+    }
+  }
+
+  return { documents, loading, error, fetchDocuments, uploadDocument, deleteDocument, deleteAllDocuments }
 })
 
 function _sleep(ms: number) {
