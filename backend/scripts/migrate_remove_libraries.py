@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
-"""One-shot, idempotent migration for the Library removal.
+"""One-shot migration for the Library removal.
 
-`SQLModel.metadata.create_all` is additive only — it can't drop the gone
-`library`/`library_document` tables or reshape the `session` table (which lost
-`library_id` and gained `rag_config`). This script does that once.
-
-It PRESERVES your uploaded documents (and their ChromaDB vectors / files) and
-drops only the library tables plus old chat sessions/messages, which referenced
-libraries and can't be mapped onto the new session→documents model. The fresh
-schema is then recreated by init_db().
+The app self-heals on startup (`init_db` → `_migrate_legacy_schema`), so this
+script is only needed to migrate a DB without starting the server (e.g. a deploy
+step). It drops the legacy library tables and the unmigratable session/message
+rows — uploaded documents are preserved — then rebuilds the new schema.
 
 Run from the backend dir:  uv run python scripts/migrate_remove_libraries.py
 Safe to run more than once.
 """
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -21,38 +16,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import models.tables  # noqa: E402,F401 — registers tables on SQLModel.metadata
-from config import settings  # noqa: E402
-from db import init_db  # noqa: E402
-
-DB_PATH = settings.sqlite_url.replace("sqlite:///", "")
-
-# Old tables/columns that no longer exist in the model.
-DROP_TABLES = ["library_document", "library", "message", "session"]
+from db import engine, init_db  # noqa: E402
+from sqlalchemy import inspect  # noqa: E402
 
 
 def main() -> None:
-    db_file = Path(DB_PATH)
-    if not db_file.exists():
-        print(f"No DB at {db_file} — nothing to migrate. init_db() will create a fresh schema.")
-        init_db()
-        return
-
-    con = sqlite3.connect(DB_PATH)
-    cur = con.cursor()
-    existing = {row[0] for row in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-
-    dropped = []
-    for table in DROP_TABLES:
-        if table in existing:
-            cur.execute(f"DROP TABLE IF EXISTS {table}")
-            dropped.append(table)
-    con.commit()
-    con.close()
-
-    print(f"Dropped tables: {dropped or '(none — already migrated)'}")
-    print("Documents preserved. Recreating fresh schema (session, message, session_document)…")
-    init_db()
-    print("Done.")
+    init_db()  # runs _migrate_legacy_schema() then create_all()
+    tables = sorted(inspect(engine).get_table_names())
+    print(f"Migration complete. Tables: {tables}")
 
 
 if __name__ == "__main__":
