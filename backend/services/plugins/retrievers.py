@@ -47,7 +47,7 @@ class HybridRetriever(BaseRetriever):
 
         # Sparse (BM25) score for every chunk.
         sparse = BM25([tokenize(c["text"]) for c in corpus]).scores(query)
-        sparse_by_key = {_key(corpus[i]["metadata"]): sparse[i] for i in range(len(corpus))}
+        sparse_by_key = {_key(c["metadata"]): s for c, s in zip(corpus, sparse)}
 
         dnorm = _minmax(dense_by_key)
         snorm = _minmax(sparse_by_key)

@@ -20,6 +20,13 @@ class VectorStore:
             kwargs["embedding_function"] = self._embedding_fn
         return self._client.get_or_create_collection(**kwargs)
 
+    def _existing_collection(self, doc_id: str) -> chromadb.Collection:
+        """Fetch an existing collection (raises if absent — callers catch)."""
+        return self._client.get_collection(
+            name=f"doc_{doc_id}",
+            embedding_function=self._embedding_fn,
+        )
+
     def upsert_chunks(self, doc_id: str, chunks: list[str], metadatas: list[dict]) -> None:
         col = self._collection(doc_id)
         ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
@@ -29,10 +36,7 @@ class VectorStore:
         results: list[dict] = []
         for doc_id in doc_ids:
             try:
-                col = self._client.get_collection(
-                    name=f"doc_{doc_id}",
-                    embedding_function=self._embedding_fn,
-                )
+                col = self._existing_collection(doc_id)
                 r = col.query(query_texts=[query_text], n_results=top_k)
                 docs = r["documents"][0]
                 if not docs:
@@ -51,10 +55,7 @@ class VectorStore:
         out: list[dict] = []
         for doc_id in doc_ids:
             try:
-                col = self._client.get_collection(
-                    name=f"doc_{doc_id}",
-                    embedding_function=self._embedding_fn,
-                )
+                col = self._existing_collection(doc_id)
                 r = col.get(include=["documents", "metadatas"])
                 for text, meta in zip(r["documents"], r["metadatas"]):
                     out.append({"text": text, "metadata": meta})
