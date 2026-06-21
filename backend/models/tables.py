@@ -23,37 +23,26 @@ class Document(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
-class Library(SQLModel, table=True):
+class Session(SQLModel, table=True):
     id: str = Field(default_factory=_new_id, primary_key=True)
-    name: str
-    description: Optional[str] = None
-    rag_config: str = "{}"  # JSON blob — RAGConfig overrides
+    title: str = "New Chat"
+    rag_config: str = "{}"  # JSON blob — RAGConfig overrides for this chat
+    provider: str  # openai | google | anthropic
+    model: str
     created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
 
 
-class LibraryDocument(SQLModel, table=True):
-    __tablename__ = "library_document"
-    # ON DELETE CASCADE: rows removed when parent library or document is deleted
-    library_id: str = Field(
-        sa_column=Column(String, ForeignKey("library.id", ondelete="CASCADE"), primary_key=True)
+class SessionDocument(SQLModel, table=True):
+    __tablename__ = "session_document"
+    # ON DELETE CASCADE: rows removed when parent session or document is deleted
+    session_id: str = Field(
+        sa_column=Column(String, ForeignKey("session.id", ondelete="CASCADE"), primary_key=True)
     )
     document_id: str = Field(
         sa_column=Column(String, ForeignKey("document.id", ondelete="CASCADE"), primary_key=True)
     )
     added_at: datetime = Field(default_factory=_now)
-
-
-class Session(SQLModel, table=True):
-    id: str = Field(default_factory=_new_id, primary_key=True)
-    title: str = "New Chat"
-    # ON DELETE CASCADE: sessions removed when owning library is deleted
-    library_id: str = Field(
-        sa_column=Column(String, ForeignKey("library.id", ondelete="CASCADE"), nullable=False)
-    )
-    provider: str  # openai | google | anthropic
-    model: str
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
 
 
 class Message(SQLModel, table=True):

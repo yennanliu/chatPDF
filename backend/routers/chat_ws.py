@@ -7,8 +7,8 @@ from sqlmodel import Session as DBSession
 from sqlmodel import select
 
 from db import get_db
-from models.tables import Library, LibraryDocument
 from models.tables import Session as SessionModel
+from models.tables import SessionDocument
 from services.chat_history import get_history, save_turn
 from services.llm_gateway import LLMGateway, get_llm_gateway
 from services.rag import run_rag_stream
@@ -50,18 +50,13 @@ async def chat_ws(
                 await websocket.send_json({"type": "error", "detail": "Session not found"})
                 continue
 
-            library = db.get(Library, session.library_id)
-            if not library:
-                await websocket.send_json({"type": "error", "detail": "Library not found"})
-                continue
-
             doc_ids = [
                 row.document_id
                 for row in db.exec(
-                    select(LibraryDocument).where(LibraryDocument.library_id == session.library_id)
+                    select(SessionDocument).where(SessionDocument.session_id == session_id)
                 ).all()
             ]
-            rag_config = RAGConfig.from_json(library.rag_config)
+            rag_config = RAGConfig.from_json(session.rag_config)
             history = get_history(session_id, db)
             llm = llm_gw.get_llm(session.provider, session.model)
 

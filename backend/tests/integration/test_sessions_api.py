@@ -2,27 +2,32 @@
 TDD — sessions API
 
 Contract under test:
-  POST   /api/sessions            → 201
+  POST   /api/sessions            → 201 (takes doc_ids + provider/model + optional rag_config)
   GET    /api/sessions            → 200 list
   GET    /api/sessions/{id}       → 200 detail + messages
   PATCH  /api/sessions/{id}       → 200 renamed
   DELETE /api/sessions/{id}       → 204
-  Session reload reconstructs full message history via GET /{id}
+  Session carries its own documents and rag_config (no Library layer).
 """
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-async def _make_library(client, name="Test Lib"):
-    r = await client.post("/api/libraries", json={"name": name})
+async def _upload_doc(client, name="t.pdf", sample_pdf=b"%PDF-1.4"):
+    r = await client.post(
+        "/api/documents/upload",
+        files={"file": (name, sample_pdf, "application/pdf")},
+    )
     assert r.status_code == 201
-    return r.json()
+    return r.json()["doc_id"]
 
 
-async def _make_session(client, library_id, title=None):
-    body = {"library_id": library_id, "provider": "openai", "model": "gpt-4o"}
+async def _make_session(client, doc_ids, title=None, rag_config=None):
+    body = {"doc_ids": doc_ids, "provider": "openai", "model": "gpt-4o"}
     if title:
         body["title"] = title
+    if rag_config is not None:
+        body["rag_config"] = rag_config
     r = await client.post("/api/sessions", json=body)
     assert r.status_code == 201
     return r.json()
@@ -30,24 +35,37 @@ async def _make_session(client, library_id, title=None):
 
 # ── create ────────────────────────────────────────────────────────────────────
 
-async def test_create_session_returns_201(client):
-    lib = await _make_library(client)
-    sess = await _make_session(client, lib["library_id"])
+async def test_create_session_returns_201(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    sess = await _make_session(client, [doc_id])
     assert "session_id" in sess
     assert sess["provider"] == "openai"
     assert sess["model"] == "gpt-4o"
     assert sess["title"] == "New Chat"
+    assert [d["doc_id"] for d in sess["documents"]] == [doc_id]
 
 
-async def test_create_session_custom_title(client):
-    lib = await _make_library(client)
-    sess = await _make_session(client, lib["library_id"], title="My research chat")
+async def test_create_session_custom_title(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    sess = await _make_session(client, [doc_id], title="My research chat")
     assert sess["title"] == "My research chat"
 
 
-async def test_create_session_unknown_library_404(client):
+async def test_create_session_persists_rag_config(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    sess = await _make_session(client, [doc_id], rag_config={"top_k": 3, "retriever": "hybrid"})
+    assert sess["rag_config"]["top_k"] == 3
+    assert sess["rag_config"]["retriever"] == "hybrid"
+
+
+async def test_create_session_no_docs_ok(client):
+    sess = await _make_session(client, [])
+    assert sess["documents"] == []
+
+
+async def test_create_session_unknown_doc_404(client):
     r = await client.post("/api/sessions", json={
-        "library_id": "no-such-lib",
+        "doc_ids": ["no-such-doc"],
         "provider": "openai",
         "model": "gpt-4o",
     })
@@ -62,10 +80,10 @@ async def test_list_sessions_empty(client):
     assert r.json() == []
 
 
-async def test_list_sessions_returns_all(client):
-    lib = await _make_library(client)
-    await _make_session(client, lib["library_id"], "S1")
-    await _make_session(client, lib["library_id"], "S2")
+async def test_list_sessions_returns_all(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    await _make_session(client, [doc_id], "S1")
+    await _make_session(client, [doc_id], "S2")
     r = await client.get("/api/sessions")
     titles = [s["title"] for s in r.json()]
     assert "S1" in titles and "S2" in titles
@@ -73,14 +91,15 @@ async def test_list_sessions_returns_all(client):
 
 # ── detail + history ──────────────────────────────────────────────────────────
 
-async def test_get_session_detail(client):
-    lib = await _make_library(client)
-    sess = await _make_session(client, lib["library_id"])
+async def test_get_session_detail(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    sess = await _make_session(client, [doc_id])
     r = await client.get(f"/api/sessions/{sess['session_id']}")
     assert r.status_code == 200
     data = r.json()
     assert data["session_id"] == sess["session_id"]
     assert data["messages"] == []
+    assert [d["doc_id"] for d in data["documents"]] == [doc_id]
 
 
 async def test_get_nonexistent_session_404(client):
@@ -88,33 +107,11 @@ async def test_get_nonexistent_session_404(client):
     assert r.status_code == 404
 
 
-async def test_session_reload_reconstructs_history(client, sample_pdf):
-    """After a WS chat turn, GET /{id} must return the full dialogue."""
-    lib = await _make_library(client)
-
-    # upload + add doc to library
-    doc = (await client.post(
-        "/api/documents/upload",
-        files={"file": ("t.pdf", sample_pdf, "application/pdf")},
-    )).json()
-    await client.post(f"/api/libraries/{lib['library_id']}/documents", json={"doc_id": doc["doc_id"]})
-
-    sess = await _make_session(client, lib["library_id"])
-
-    # seed messages directly via ws (tested in test_chat_ws.py);
-    # here we just confirm the REST endpoint correctly returns them
-    # by inserting rows via the DB session (conftest db_session not in scope here,
-    # so we rely on the WS test for end-to-end; this test checks the GET shape)
-    r = await client.get(f"/api/sessions/{sess['session_id']}")
-    assert r.status_code == 200
-    assert isinstance(r.json()["messages"], list)
-
-
 # ── rename / delete ───────────────────────────────────────────────────────────
 
-async def test_rename_session(client):
-    lib = await _make_library(client)
-    sess = await _make_session(client, lib["library_id"])
+async def test_rename_session(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    sess = await _make_session(client, [doc_id])
     sid = sess["session_id"]
 
     r = await client.patch(f"/api/sessions/{sid}", json={"title": "Renamed"})
@@ -122,9 +119,9 @@ async def test_rename_session(client):
     assert r.json()["title"] == "Renamed"
 
 
-async def test_delete_session(client):
-    lib = await _make_library(client)
-    sess = await _make_session(client, lib["library_id"])
+async def test_delete_session(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    sess = await _make_session(client, [doc_id])
     sid = sess["session_id"]
 
     r = await client.delete(f"/api/sessions/{sid}")
@@ -134,9 +131,9 @@ async def test_delete_session(client):
     assert r.status_code == 404
 
 
-async def test_two_sessions_on_same_library_independent(client):
-    lib = await _make_library(client)
-    s1 = await _make_session(client, lib["library_id"], "Chat A")
-    s2 = await _make_session(client, lib["library_id"], "Chat B")
+async def test_two_sessions_share_docs_independently(client, sample_pdf):
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    s1 = await _make_session(client, [doc_id], "Chat A")
+    s2 = await _make_session(client, [doc_id], "Chat B")
     assert s1["session_id"] != s2["session_id"]
-    assert s1["library_id"] == s2["library_id"]
+    assert [d["doc_id"] for d in s1["documents"]] == [d["doc_id"] for d in s2["documents"]]

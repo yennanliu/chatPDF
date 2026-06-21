@@ -147,9 +147,9 @@ def delete_document(
         db.commit()
     except Exception:
         db.rollback()
-        logger.exception("delete FAILED (db): doc_id=%s — likely referenced by a library", doc_id)
+        logger.exception("delete FAILED (db): doc_id=%s — likely referenced by a session", doc_id)
         raise HTTPException(
             status_code=409,
-            detail="Cannot delete: document is still a member of one or more libraries.",
+            detail="Cannot delete: document is still referenced by one or more chat sessions.",
         )
     logger.info("delete done: doc_id=%s", doc_id)

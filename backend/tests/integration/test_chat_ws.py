@@ -7,38 +7,38 @@ Contract under test:
     server → { "type": "token", "data": "..." }  (one or more)
     server → { "type": "done", "sources": [...] }
 
-  Phase 3 additions:
-    - RAGConfig.top_k on library limits sources in done frame
+  Additions:
+    - per-session RAGConfig.top_k limits sources in done frame
     - Cross-collection search: sources from multiple docs
     - Source citation shape: doc_name, chunk_preview, score
-    - Two sessions on same library are history-independent
+    - Two sessions are history-independent
 """
-
+import io
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _setup(tc, sample_pdf):
-    """Upload doc, create library+session, return session_id."""
-    import io
+def _upload(tc, name, sample_pdf):
     resp = tc.post(
         "/api/documents/upload",
-        files={"file": ("doc.pdf", io.BytesIO(sample_pdf), "application/pdf")},
+        files={"file": (name, io.BytesIO(sample_pdf), "application/pdf")},
     )
     assert resp.status_code == 201
-    doc_id = resp.json()["doc_id"]
+    return resp.json()["doc_id"]
 
-    lib = tc.post("/api/libraries", json={"name": "WS Test Lib"}).json()
-    tc.post(
-        f"/api/libraries/{lib['library_id']}/documents",
-        json={"doc_id": doc_id},
-    )
 
-    sess = tc.post("/api/sessions", json={
-        "library_id": lib["library_id"],
-        "provider": "openai",
-        "model": "gpt-4o",
-    }).json()
-    return sess["session_id"]
+def _make_session(tc, doc_ids, rag_config=None, title=None):
+    body = {"doc_ids": doc_ids, "provider": "openai", "model": "gpt-4o"}
+    if rag_config is not None:
+        body["rag_config"] = rag_config
+    if title:
+        body["title"] = title
+    return tc.post("/api/sessions", json=body).json()["session_id"]
+
+
+def _setup(tc, sample_pdf):
+    """Upload a doc, create a session over it, return session_id."""
+    doc_id = _upload(tc, "doc.pdf", sample_pdf)
+    return _make_session(tc, [doc_id])
 
 
 def _recv_all(ws, max_frames: int = 30) -> list[dict]:
@@ -115,28 +115,14 @@ def test_ws_multiple_turns_accumulate_history(ws_client, sample_pdf):
     assert len(user_msgs) == 2
 
 
-# ── Phase 3: RAGConfig override ───────────────────────────────────────────────
+# ── per-session RAGConfig override ────────────────────────────────────────────
 
 def test_rag_config_top_k_limits_sources(ws_client, sample_pdf):
-    """Library with top_k=1 → done frame contains at most 1 source."""
-    import io
-    lib = ws_client.post("/api/libraries", json={
-        "name": "Tight Lib",
-        "rag_config": {"top_k": 1},
-    }).json()
-    doc = ws_client.post(
-        "/api/documents/upload",
-        files={"file": ("tight.pdf", io.BytesIO(sample_pdf), "application/pdf")},
-    ).json()
-    ws_client.post(f"/api/libraries/{lib['library_id']}/documents", json={"doc_id": doc["doc_id"]})
+    """Session with top_k=1 → done frame contains at most 1 source."""
+    doc_id = _upload(ws_client, "tight.pdf", sample_pdf)
+    sid = _make_session(ws_client, [doc_id], rag_config={"top_k": 1})
 
-    sess = ws_client.post("/api/sessions", json={
-        "library_id": lib["library_id"],
-        "provider": "openai",
-        "model": "gpt-4o",
-    }).json()
-
-    with ws_client.websocket_connect(f"/ws/chat/{sess['session_id']}") as ws:
+    with ws_client.websocket_connect(f"/ws/chat/{sid}") as ws:
         ws.send_json({"query": "Summarise"})
         frames = _recv_all(ws)
 
@@ -144,28 +130,14 @@ def test_rag_config_top_k_limits_sources(ws_client, sample_pdf):
     assert len(done["sources"]) <= 1
 
 
-def test_rag_config_overrides_are_independent_per_library(ws_client, sample_pdf):
-    """Two libraries with different top_k values produce different source counts."""
-    import io
+def test_rag_config_overrides_are_independent_per_session(ws_client, sample_pdf):
+    """Two sessions with different top_k values produce different source caps."""
+    def _session(top_k: int) -> str:
+        doc_id = _upload(ws_client, f"doc_{top_k}.pdf", sample_pdf)
+        return _make_session(ws_client, [doc_id], rag_config={"top_k": top_k})
 
-    def _make_session(top_k: int) -> str:
-        lib = ws_client.post("/api/libraries", json={
-            "name": f"Lib top_k={top_k}",
-            "rag_config": {"top_k": top_k},
-        }).json()
-        doc = ws_client.post(
-            "/api/documents/upload",
-            files={"file": (f"doc_{top_k}.pdf", io.BytesIO(sample_pdf), "application/pdf")},
-        ).json()
-        ws_client.post(f"/api/libraries/{lib['library_id']}/documents", json={"doc_id": doc["doc_id"]})
-        return ws_client.post("/api/sessions", json={
-            "library_id": lib["library_id"],
-            "provider": "openai",
-            "model": "gpt-4o",
-        }).json()["session_id"]
-
-    sid1 = _make_session(top_k=1)
-    _make_session(top_k=5)
+    sid1 = _session(top_k=1)
+    _session(top_k=5)
 
     def _sources(sid):
         with ws_client.websocket_connect(f"/ws/chat/{sid}") as ws:
@@ -174,11 +146,9 @@ def test_rag_config_overrides_are_independent_per_library(ws_client, sample_pdf)
         return next(f for f in frames if f["type"] == "done")["sources"]
 
     assert len(_sources(sid1)) <= 1
-    # sid5 may also return ≤1 since the doc has only one chunk; what matters
-    # is that top_k=1 is a stricter cap — no assertion on sid5 count
 
 
-# ── Phase 3: source citation shape ───────────────────────────────────────────
+# ── source citation shape ─────────────────────────────────────────────────────
 
 def test_source_citations_have_correct_fields(ws_client, sample_pdf):
     """Each source in the done frame must have doc_name, chunk_preview, score."""
@@ -197,63 +167,34 @@ def test_source_citations_have_correct_fields(ws_client, sample_pdf):
         assert isinstance(src["score"], float)
 
 
-# ── Phase 3: cross-collection search ─────────────────────────────────────────
+# ── cross-collection search ───────────────────────────────────────────────────
 
 def test_cross_collection_search_queries_all_docs(ws_client, sample_pdf):
-    """A library with two documents searches both ChromaDB collections."""
-    import io
+    """A session with two documents searches both ChromaDB collections."""
+    doc1 = _upload(ws_client, "alpha.pdf", sample_pdf)
+    doc2 = _upload(ws_client, "beta.pdf", sample_pdf)
+    sid = _make_session(ws_client, [doc1, doc2])
 
-    lib = ws_client.post("/api/libraries", json={"name": "Multi-doc Lib"}).json()
-
-    # Upload two separate documents
-    doc1 = ws_client.post(
-        "/api/documents/upload",
-        files={"file": ("alpha.pdf", io.BytesIO(sample_pdf), "application/pdf")},
-    ).json()
-    doc2 = ws_client.post(
-        "/api/documents/upload",
-        files={"file": ("beta.pdf", io.BytesIO(sample_pdf), "application/pdf")},
-    ).json()
-    ws_client.post(f"/api/libraries/{lib['library_id']}/documents", json={"doc_id": doc1["doc_id"]})
-    ws_client.post(f"/api/libraries/{lib['library_id']}/documents", json={"doc_id": doc2["doc_id"]})
-
-    sess = ws_client.post("/api/sessions", json={
-        "library_id": lib["library_id"],
-        "provider": "openai",
-        "model": "gpt-4o",
-    }).json()
-
-    with ws_client.websocket_connect(f"/ws/chat/{sess['session_id']}") as ws:
+    with ws_client.websocket_connect(f"/ws/chat/{sid}") as ws:
         ws.send_json({"query": "Tell me about the documents"})
         frames = _recv_all(ws)
 
     done = next(f for f in frames if f["type"] == "done")
-    # With two indexed docs and top_k=5, at least one source must appear
     assert len(done["sources"]) >= 1
-    # At least one source must reference a real file name
     assert any(s["doc_name"] for s in done["sources"])
 
 
-# ── Phase 3: independent session histories ────────────────────────────────────
+# ── independent session histories ─────────────────────────────────────────────
 
-def test_two_sessions_on_same_library_have_independent_histories(ws_client, sample_pdf):
-    """Messages in session A do not appear in session B (same library)."""
-    sid = _setup(ws_client, sample_pdf)
-    lib_id = ws_client.get(f"/api/sessions/{sid}").json()["library_id"]
+def test_two_sessions_have_independent_histories(ws_client, sample_pdf):
+    """Messages in session A do not appear in session B (same docs)."""
+    doc_id = _upload(ws_client, "shared.pdf", sample_pdf)
+    sid = _make_session(ws_client, [doc_id])
+    sid2 = _make_session(ws_client, [doc_id], title="Session B")
 
-    # Open a second session on the same library
-    sid2 = ws_client.post("/api/sessions", json={
-        "library_id": lib_id,
-        "provider": "openai",
-        "model": "gpt-4o",
-        "title": "Session B",
-    }).json()["session_id"]
-
-    # Chat in session 1 only
     with ws_client.websocket_connect(f"/ws/chat/{sid}") as ws:
         ws.send_json({"query": "Only in session 1"})
         _recv_all(ws)
 
-    # Session 2 must have no messages
     detail2 = ws_client.get(f"/api/sessions/{sid2}").json()
     assert detail2["messages"] == []

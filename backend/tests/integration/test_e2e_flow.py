@@ -2,7 +2,7 @@
 Phase 7 — End-to-end integration tests
 
 Full happy paths that chain every layer together in a single test:
-  upload → poll status → library → add doc → session → chat → reload history
+  upload → poll status → session (with docs) → chat → reload history
 
 These catch regressions that per-endpoint tests miss: mismatched IDs across
 operations, cascade assumptions, history accumulation, and status transitions.
@@ -30,11 +30,11 @@ def _recv_until_done(ws, max_frames: int = 40) -> list[dict]:
 
 # ── E2E: full happy path ──────────────────────────────────────────────────────
 
-def test_e2e_upload_library_session_chat_reload(ws_client, sample_pdf):
+def test_e2e_upload_session_chat_reload(ws_client, sample_pdf):
     """
     Complete user journey:
-      upload PDF → verify indexed → create library → add doc →
-      create session → chat turn 1 → reload history → chat turn 2 →
+      upload PDF → verify indexed → create session over the doc →
+      chat turn 1 → reload history → chat turn 2 →
       verify history accumulation → rename session
     """
     # 1. Upload
@@ -47,28 +47,16 @@ def test_e2e_upload_library_session_chat_reload(ws_client, sample_pdf):
     assert status["status"] == "indexed"
     assert status["page_count"] == 1
 
-    # 3. Create library
-    lib = ws_client.post("/api/libraries", json={"name": "E2E Library"}).json()
-    assert lib["library_id"]
-    lib_id = lib["library_id"]
-
-    # 4. Add document to library
-    result = ws_client.post(
-        f"/api/libraries/{lib_id}/documents",
-        json={"doc_id": doc_id},
-    )
-    assert result.status_code == 200
-    assert any(d["doc_id"] == doc_id for d in result.json()["documents"])
-
-    # 5. Create session
+    # 3. Create session over the document
     sess = ws_client.post("/api/sessions", json={
-        "library_id": lib_id,
+        "doc_ids": [doc_id],
         "provider": "openai",
         "model": "gpt-4o",
         "title": "E2E Chat",
     }).json()
     assert sess["session_id"]
     assert sess["title"] == "E2E Chat"
+    assert any(d["doc_id"] == doc_id for d in sess["documents"])
     session_id = sess["session_id"]
 
     # 6. Chat turn 1
@@ -131,16 +119,15 @@ def test_e2e_ws_error_on_bad_session(ws_client):
     assert "detail" in msg
 
 
-# ── E2E: error state — library with no docs still returns done frame ──────────
+# ── E2E: error state — session with no docs still returns done frame ──────────
 
-def test_e2e_empty_library_chat_returns_done(ws_client, sample_pdf):
+def test_e2e_empty_session_chat_returns_done(ws_client, sample_pdf):
     """
-    Chatting on a library with no indexed documents should still complete
-    (no crash); sources list will be empty or minimal.
+    Chatting on a session with no documents should still complete (no crash);
+    sources list will be empty or minimal.
     """
-    lib = ws_client.post("/api/libraries", json={"name": "Empty Lib"}).json()
     sess = ws_client.post("/api/sessions", json={
-        "library_id": lib["library_id"],
+        "doc_ids": [],
         "provider": "openai",
         "model": "gpt-4o",
     }).json()
@@ -156,20 +143,14 @@ def test_e2e_empty_library_chat_returns_done(ws_client, sample_pdf):
 
 # ── E2E: cascade integrity ────────────────────────────────────────────────────
 
-def test_e2e_delete_library_removes_sessions(ws_client, sample_pdf):
+def test_e2e_delete_session_removes_history(ws_client, sample_pdf):
     """
-    Deleting a library that has an active session with chat history
-    cascades: the session (and its messages) are removed.
+    Deleting a session cascades: its messages (and document links) are removed,
+    and the document itself survives.
     """
-    # Set up full stack
     doc = _upload(ws_client, sample_pdf, "cascade.pdf")
-    lib = ws_client.post("/api/libraries", json={"name": "Cascade Lib"}).json()
-    ws_client.post(
-        f"/api/libraries/{lib['library_id']}/documents",
-        json={"doc_id": doc["doc_id"]},
-    )
     sess = ws_client.post("/api/sessions", json={
-        "library_id": lib["library_id"],
+        "doc_ids": [doc["doc_id"]],
         "provider": "openai",
         "model": "gpt-4o",
     }).json()
@@ -183,8 +164,9 @@ def test_e2e_delete_library_removes_sessions(ws_client, sample_pdf):
     detail = ws_client.get(f"/api/sessions/{session_id}").json()
     assert len(detail["messages"]) > 0
 
-    # Delete the library
-    assert ws_client.delete(f"/api/libraries/{lib['library_id']}").status_code == 204
-
-    # Session is gone
+    # Delete the session
+    assert ws_client.delete(f"/api/sessions/{session_id}").status_code == 204
     assert ws_client.get(f"/api/sessions/{session_id}").status_code == 404
+
+    # The document still exists independently
+    assert ws_client.get(f"/api/documents/{doc['doc_id']}/status").status_code == 200
