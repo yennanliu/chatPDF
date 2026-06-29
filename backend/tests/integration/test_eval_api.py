@@ -55,6 +55,41 @@ async def test_presets_listed(client):
     assert "dense / k5" in labels
 
 
+async def test_tracing_status_disabled_by_default(client, monkeypatch):
+    monkeypatch.setattr(config.settings, "langfuse_public_key", "")
+    monkeypatch.setattr(config.settings, "langfuse_secret_key", "")
+    r = await client.get("/api/eval/tracing")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enabled"] is False
+    assert body["host"] is None
+
+
+# ── run history ───────────────────────────────────────────────────────────────
+
+async def test_history_empty_by_default(client):
+    r = await client.get("/api/eval/history")
+    assert r.status_code == 200
+    assert r.json() == {"runs": []}
+
+
+async def test_run_is_persisted_to_history(client, test_vs, gold_path):
+    _seed(test_vs, "dh", ["the ingest worker uses exponential backoff"])
+    await client.put("/api/eval/gold", json={"items": [{
+        "question": "retry policy?", "doc_ids": ["dh"],
+        "relevant_substrings": ["exponential backoff"],
+    }]})
+    await client.post("/api/eval/run", json={
+        "configs": [{"label": "dense", "overrides": {"retriever": "dense"}}],
+        "k": 5,
+    })
+    r = await client.get("/api/eval/history")
+    runs = r.json()["runs"]
+    assert len(runs) == 1
+    assert runs[0]["summary"][0]["label"] == "dense"
+    assert runs[0]["summary"][0]["metrics"]["hit@k"] == 1.0
+
+
 # ── run: retrieval only ───────────────────────────────────────────────────────
 
 async def test_run_retrieval_detects_hit(client, test_vs, gold_path):

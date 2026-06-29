@@ -77,13 +77,16 @@ def judge_answer(
     context_texts: list[str],
     answer: str,
     llm: BaseChatModel,
+    config: dict | None = None,
 ) -> dict | None:
     """Ask ``llm`` to grade ``answer`` against the context. Returns the parsed
-    scores, or None if the call fails or the output can't be parsed."""
+    scores, or None if the call fails or the output can't be parsed. ``config``
+    carries the LangChain run config (e.g. Langfuse callbacks) when tracing is on.
+    """
     context = "\n\n".join(context_texts) or "No context retrieved."
     prompt = _JUDGE_PROMPT.format(question=question, context=context, answer=answer)
     try:
-        resp = llm.invoke([HumanMessage(content=prompt)])
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
     except Exception as exc:
         logger.warning("judge call failed: %s", exc)
         return None

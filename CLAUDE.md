@@ -80,12 +80,15 @@ Always commit `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 | `backend/services/eval.py` | Pure retrieval metrics (Hit@k, Recall@k, MRR, nDCG@k, Precision@k) + substring scorer |
 | `backend/services/eval_runner.py` | Live eval runner — drives the RAG path over a gold set per config variant |
 | `backend/services/judge.py` | LLM-as-judge (faithfulness / answer-relevance) for generation quality |
+| `backend/services/eval_history.py` | Persists per-run aggregate metrics (`eval_run` table) for trend charts |
+| `backend/services/tracing.py` | Optional Langfuse tracing — no-op when unconfigured; traces every LLM call + pushes eval scores |
 | `backend/services/plugins/` | Chunker / Embedder / Retriever / Reranker plugins |
 | `backend/routers/documents.py` | `POST /api/documents/upload`, `GET`, `GET /{id}/status`, `DELETE` |
 | `backend/routers/sessions.py` | Session CRUD — each session owns its `doc_ids` + `rag_config` |
 | `backend/routers/chat_ws.py` | `WS /ws/chat/{session_id}` — streaming chat |
-| `backend/routers/eval.py` | `GET/PUT /api/eval/gold`, `GET /api/eval/presets`, `POST /api/eval/run` |
-| `frontend/src/views/EvalView.vue` | RAG Evaluation page — gold-set editor, config comparison, metrics + drill-down |
+| `backend/routers/eval.py` | `GET/PUT /api/eval/gold`, `GET /api/eval/presets`, `GET /api/eval/history`, `GET /api/eval/tracing`, `POST /api/eval/run` |
+| `frontend/src/views/EvalView.vue` | RAG Evaluation page — gold-set editor, config comparison, metrics + charts + trends + drill-down |
+| `frontend/src/components/charts/` | Dependency-free SVG charts (`GroupedBarChart`, `TrendChart`) |
 | `backend/tests/conftest.py` | Fixtures: `client`, `ws_client`, `test_vs`, `FakeLLMGateway` |
 
 ---
@@ -102,7 +105,18 @@ EMBEDDING_BACKEND=local     # local (default) | openai
 CHROMA_DATA_DIR=../chroma_data
 UPLOAD_DIR=../uploads
 SQLITE_URL=sqlite:///../chatpdf.db
+
+# Optional Langfuse tracing (free) — unset = fully disabled, no network calls
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
 ```
+
+When the Langfuse keys are set, every LLM call (chat, eval answer, judge, query
+expansion) is traced with latency/token/cost, and eval metrics are pushed as
+scores for trend tracking. The Evaluation page also charts metrics in-app
+(`GroupedBarChart` per run, `TrendChart` over run history). See
+[`doc/rag_evaluation.md`](doc/rag_evaluation.md) §8.
 
 ## WebSocket protocol
 

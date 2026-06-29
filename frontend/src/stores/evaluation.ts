@@ -66,6 +66,28 @@ export interface RunResult {
   judge_enabled: boolean
   results: VariantResult[]
   warnings: string[]
+  tracing_enabled?: boolean
+}
+
+/** One variant's headline metrics, as persisted in run history. */
+export interface RunSummary {
+  label: string
+  config: Record<string, unknown>
+  metrics: Metrics
+}
+
+export interface HistoryRun {
+  id: string
+  created_at: string
+  k: number
+  n_questions: number
+  judge_enabled: boolean
+  summary: RunSummary[]
+}
+
+export interface TracingStatus {
+  enabled: boolean
+  host: string | null
 }
 
 let _seq = 0
@@ -82,6 +104,8 @@ export const useEvalStore = defineStore('evaluation', () => {
   const gold = ref<GoldItem[]>([])
   const presets = ref<Preset[]>([])
   const result = ref<RunResult | null>(null)
+  const history = ref<HistoryRun[]>([])
+  const tracing = ref<TracingStatus>({ enabled: false, host: null })
   const loadingGold = ref(false)
   const saving = ref(false)
   const running = ref(false)
@@ -110,6 +134,22 @@ export const useEvalStore = defineStore('evaluation', () => {
     } catch (e) {
       _fail(e)
     }
+  }
+
+  async function fetchHistory(): Promise<void> {
+    try {
+      const data = await api.get<{ runs: HistoryRun[] }>('/api/eval/history')
+      history.value = data.runs
+    } catch (e) {
+      _fail(e)
+    }
+  }
+
+  async function fetchTracing(): Promise<void> {
+    // Best-effort: the status banner is informational, never block the page on it.
+    try {
+      tracing.value = await api.get<TracingStatus>('/api/eval/tracing')
+    } catch { /* leave default (disabled) */ }
   }
 
   async function saveGold(): Promise<boolean> {
@@ -144,6 +184,8 @@ export const useEvalStore = defineStore('evaluation', () => {
       if (result.value?.warnings?.length) {
         result.value.warnings.forEach(w => toast.error(w))
       }
+      // Refresh the trend charts with the run just persisted server-side.
+      await fetchHistory()
     } catch (e) {
       _fail(e)
     } finally {
@@ -152,7 +194,7 @@ export const useEvalStore = defineStore('evaluation', () => {
   }
 
   return {
-    gold, presets, result, loadingGold, saving, running,
-    fetchGold, fetchPresets, saveGold, runEval,
+    gold, presets, result, history, tracing, loadingGold, saving, running,
+    fetchGold, fetchPresets, fetchHistory, fetchTracing, saveGold, runEval,
   }
 })

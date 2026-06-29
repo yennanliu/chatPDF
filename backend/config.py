@@ -20,6 +20,17 @@ class Settings(BaseSettings):
     sqlite_url: str = "sqlite:///../chatpdf.db"
     eval_gold_path: str = "../eval/gold.json"  # persisted RAG-eval gold set
 
+    # ── Langfuse observability (optional) ─────────────────────────────────────
+    # When both keys are set, every LLM call (chat / eval answer / judge / query
+    # expansion) is traced and eval metrics are pushed as scores. Unset → no-op.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"  # or https://us.cloud.langfuse.com / self-host URL
+
+    @property
+    def langfuse_enabled(self) -> bool:
+        return bool(self.langfuse_public_key and self.langfuse_secret_key)
+
     # Comma-separated allowed CORS origins
     cors_origins: str = "http://localhost:5173"
 

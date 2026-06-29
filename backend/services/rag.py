@@ -57,7 +57,7 @@ def _build_messages(
     return [SystemMessage(content=system_template.format(context=ctx)), *history, HumanMessage(content=query)]
 
 
-def _expand_queries(query: str, n: int, llm: BaseChatModel) -> list[str]:
+def _expand_queries(query: str, n: int, llm: BaseChatModel, config: dict | None = None) -> list[str]:
     """Ask the LLM for ``n`` alternative phrasings to widen recall. Falls back to
     just the original query if generation fails or returns nothing usable."""
     prompt = (
@@ -65,7 +65,7 @@ def _expand_queries(query: str, n: int, llm: BaseChatModel) -> list[str]:
         f"its meaning, one per line, no numbering:\n\n{query}"
     )
     try:
-        resp = llm.invoke([HumanMessage(content=prompt)])
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
         variants = [line.strip("-• \t") for line in str(resp.content).splitlines() if line.strip()]
     except Exception:
         variants = []
@@ -78,14 +78,17 @@ def _expand_queries(query: str, n: int, llm: BaseChatModel) -> list[str]:
     return out[: n + 1]
 
 
-def _retrieve(retriever, query: str, cfg: RAGConfig, doc_ids: list[str], llm: BaseChatModel) -> list[dict]:
+def _retrieve(
+    retriever, query: str, cfg: RAGConfig, doc_ids: list[str],
+    llm: BaseChatModel, config: dict | None = None,
+) -> list[dict]:
     """Run retrieval for the query (and its paraphrases when multi_query is on),
     merging results by chunk key and keeping the best score for each."""
     if cfg.multi_query <= 0:
         return retriever.search(query, cfg.top_k, doc_ids)
 
     merged: dict[tuple, dict] = {}
-    for q in _expand_queries(query, cfg.multi_query, llm):
+    for q in _expand_queries(query, cfg.multi_query, llm, config):
         for hit in retriever.search(q, cfg.top_k, doc_ids):
             meta = hit["metadata"]
             key = (meta.get("doc_id"), meta.get("chunk_index"))
@@ -101,19 +104,21 @@ def retrieve_context(
     rag_config: RAGConfig,
     vs: VectorStore,
     llm: BaseChatModel | None = None,
+    config: dict | None = None,
 ) -> list[dict]:
     """Run the full retrieval path — retriever (optionally multi-query widened),
     grade filter, then reranker — and return the final context chunks.
 
     Shared by ``run_rag_stream`` and the evaluation runner so both measure the
     *same* pipeline. ``llm`` is only needed when ``multi_query`` is on; pass None
-    to evaluate retrieval without an LLM available.
+    to evaluate retrieval without an LLM available. ``config`` is the LangChain
+    run config (e.g. Langfuse callbacks) forwarded to the query-expansion LLM call.
     """
     retriever = build_retriever(rag_config, vs)
 
     # 1. Retrieve (widen with paraphrases only when multi_query is on and we have an LLM)
     if rag_config.multi_query > 0 and llm is not None:
-        context = _retrieve(retriever, query, rag_config, doc_ids, llm)
+        context = _retrieve(retriever, query, rag_config, doc_ids, llm, config)
     else:
         context = retriever.search(query, rag_config.top_k, doc_ids)
 
@@ -162,15 +167,16 @@ async def run_rag_stream(
     rag_config: RAGConfig,
     vs: VectorStore,
     llm: BaseChatModel,
+    config: dict | None = None,
 ) -> AsyncIterator[Union[str, dict]]:
-    # 1. Retrieve + grade + rerank
-    context = retrieve_context(query, doc_ids, rag_config, vs, llm)
+    # 1. Retrieve + grade + rerank (forward tracing config to query expansion)
+    context = retrieve_context(query, doc_ids, rag_config, vs, llm, config)
 
     # 2. Build prompt (custom system prompt allowed; trimmed to the token budget)
     messages = build_rag_messages(query, context, history, rag_config)
 
-    # 3. Stream tokens from LLM
-    async for chunk in llm.astream(messages):
+    # 3. Stream tokens from LLM (config carries Langfuse callbacks when enabled)
+    async for chunk in llm.astream(messages, config=config):
         if chunk.content:
             yield str(chunk.content)
 

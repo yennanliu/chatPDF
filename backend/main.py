@@ -32,7 +32,12 @@ async def lifespan(app: FastAPI):
         from services.plugins.rerankers import CrossEncoderReranker
         logger.info("warming cross-encoder reranker…")
         CrossEncoderReranker().warm()
+    if settings.langfuse_enabled:
+        logger.info("Langfuse tracing configured (host=%s)", settings.langfuse_host)
     yield
+    # Drain any buffered Langfuse events before the process exits.
+    from services import tracing
+    tracing.flush()
 
 
 app = FastAPI(

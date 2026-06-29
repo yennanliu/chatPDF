@@ -199,3 +199,46 @@ Measurement first, because it makes everything else decidable.
    failed retrievals, higher ingest cost.
 
 See [`rag_enhancements.md`](rag_enhancements.md) for the full proposal detail.
+
+---
+
+## 8. Observability & trends (Langfuse + in-app charts)
+
+The eval harness gives a point-in-time snapshot; observability tells you what's
+happening on *every* call and how quality moves *over time*.
+
+### In-app (always on, no setup)
+
+* **Metric comparison chart** — the Results table also renders as a grouped bar
+  chart (`GroupedBarChart.vue`), one bar per config across each [0,1] metric.
+* **Quality trends** — every run is persisted (`eval_run` table,
+  `services/eval_history.py`) and charted across runs (`TrendChart.vue`), one
+  line per config. Pick the metric; appears once there are ≥2 runs.
+* Both are dependency-free SVG — no chart library, nothing to keep updated.
+
+### Per-call tracing (Langfuse, optional & free)
+
+We integrate **[Langfuse](https://langfuse.com)** rather than LangSmith: it's
+open-source (self-hostable for free) *and* has a free cloud tier (Hobby, 50k
+events/mo, no card), with a native LangChain `CallbackHandler`.
+
+Setup — paste two keys into `backend/.env`:
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com   # or us. / self-host
+```
+
+With keys set, `services/tracing.py` attaches a callback to **every** LLM call —
+chat generation, eval answer, judge, and query expansion — so each is traced
+with latency / token usage / cost. Each eval variant becomes one trace, and its
+aggregate metrics (`eval/hit@k`, `eval/ndcg@k`, `eval/faithfulness`, …) are
+pushed as **Langfuse scores** for long-horizon trend dashboards in the Langfuse
+UI. The Evaluation page shows a banner indicating whether tracing is live.
+
+**Design notes.** Tracing is *fully opt-in*: with no keys, every function in
+`tracing.py` is a no-op — no SDK init, no network, no new failure modes — so
+dev / tests / CI are unaffected. All Langfuse calls are wrapped in try/except: a
+tracing failure must never break a chat turn or an eval run. The client is
+initialised at most once per process and flushed on shutdown.

@@ -11,6 +11,7 @@ from config import settings
 from db import get_db
 from models.tables import Session as SessionModel
 from models.tables import SessionDocument
+from services import tracing
 from services.chat_history import get_history, save_turn
 from services.llm_gateway import LLMGateway, get_llm_gateway
 from services.rag import run_rag_stream
@@ -81,9 +82,11 @@ async def chat_ws(
 
             tokens: list[str] = []
             sources: list[dict] = []
+            # Trace this turn to Langfuse (no-op / None when tracing is disabled).
+            trace_config = tracing.chat_config(session_id)
 
             try:
-                async for item in run_rag_stream(query, doc_ids, history, rag_config, vs, llm):
+                async for item in run_rag_stream(query, doc_ids, history, rag_config, vs, llm, trace_config):
                     if isinstance(item, dict) and item.get("__done__"):
                         sources = item["sources"]
                         await websocket.send_json({"type": "done", "sources": sources})
