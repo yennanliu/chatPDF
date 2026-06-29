@@ -15,6 +15,16 @@ class CrossEncoderReranker(BaseReranker):
         self._model_name = model
         self._model = None  # lazy load
 
+    def warm(self) -> None:
+        """Eagerly load the model so the first real query isn't stalled by the
+        download/load. Safe to call at startup; failures are swallowed."""
+        try:
+            from sentence_transformers import CrossEncoder
+            if self._model is None:
+                self._model = CrossEncoder(self._model_name)
+        except Exception:
+            pass
+
     def rerank(self, query: str, chunks: list[dict]) -> list[dict]:
         from sentence_transformers import CrossEncoder
         if self._model is None:

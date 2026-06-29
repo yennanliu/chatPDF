@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
+import ToastHost from '@/components/ToastHost.vue'
+import { useTheme, initTheme } from '@/composables/useTheme'
+import { API_BASE } from '@/lib/api'
 
 const route   = useRoute()
 const navOpen = ref(false)
+const { theme, toggle: toggleTheme } = useTheme()
+
+const docsUrl = `${API_BASE}/docs`
+
+onMounted(initTheme)
 
 function closeNav() { navOpen.value = false }
 </script>
@@ -80,7 +88,7 @@ function closeNav() { navOpen.value = false }
       </nav>
 
       <div class="sidebar-footer">
-        <a href="/docs" target="_blank" class="sidebar-link">
+        <a :href="docsUrl" target="_blank" class="sidebar-link">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <line x1="12" y1="8" x2="12" y2="12"/>
@@ -88,6 +96,16 @@ function closeNav() { navOpen.value = false }
           </svg>
           API Docs
         </a>
+        <button class="sidebar-link theme-toggle" :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleTheme">
+          <svg v-if="theme === 'dark'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+          <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          {{ theme === 'dark' ? 'Light mode' : 'Dark mode' }}
+        </button>
       </div>
     </aside>
 
@@ -95,6 +113,8 @@ function closeNav() { navOpen.value = false }
     <main class="main-content">
       <RouterView />
     </main>
+
+    <ToastHost />
   </div>
 </template>
 
@@ -172,6 +192,12 @@ function closeNav() { navOpen.value = false }
   transition: color .15s;
 }
 .sidebar-link:hover { color: var(--text); }
+.theme-toggle {
+  width: 100%; margin-top: 10px;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: .8rem; font-weight: 500;
+  padding: 0;
+}
 
 /* ── Main content ────────────────────────────────────────────────────────────── */
 .main-content { flex: 1; min-width: 0; overflow-y: auto; }

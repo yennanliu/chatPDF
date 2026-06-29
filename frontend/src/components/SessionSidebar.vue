@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useSessionsStore } from '@/stores/sessions'
 
 defineProps<{ activeSessionId: string | null }>()
@@ -12,6 +12,12 @@ const emit = defineEmits<{
 const store     = useSessionsStore()
 const editingId = ref<string | null>(null)
 const editTitle = ref('')
+const search    = ref('')
+
+const filteredSessions = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return q ? store.sessions.filter(s => s.title.toLowerCase().includes(q)) : store.sessions
+})
 
 function formatDate(iso: string) {
   const d   = new Date(iso)
@@ -51,6 +57,10 @@ async function remove(id: string) {
       </button>
     </div>
 
+    <div v-if="store.sessions.length > 6" class="sidebar-search">
+      <input v-model="search" class="input" placeholder="Search sessions…" aria-label="Search sessions" />
+    </div>
+
     <div v-if="store.loading" class="sidebar-hint">
       <span class="spinner" /> Loading…
     </div>
@@ -66,7 +76,7 @@ async function remove(id: string) {
 
     <ul v-else class="session-list">
       <li
-        v-for="sess in store.sessions"
+        v-for="sess in filteredSessions"
         :key="sess.session_id"
         class="session-item"
         :class="{ active: sess.session_id === activeSessionId }"
@@ -132,6 +142,9 @@ async function remove(id: string) {
   text-transform: uppercase; letter-spacing: .07em;
   color: var(--text-muted);
 }
+
+.sidebar-search { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.sidebar-search .input { padding: 6px 10px; font-size: .8rem; }
 
 .sidebar-hint {
   display: flex; align-items: center; gap: 8px;

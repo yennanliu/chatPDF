@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { ChatMessage, Source } from '@/composables/useChatSocket'
+import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{ message: ChatMessage }>()
+const toast = useToast()
 
 const sourcesOpen = ref(false)
+
+async function copyContent() {
+  try {
+    await navigator.clipboard.writeText(props.message.content)
+    toast.success('Copied to clipboard')
+  } catch {
+    toast.error('Could not copy')
+  }
+}
 
 const hasSources = computed(
   () => !props.message.isStreaming && (props.message.sources?.length ?? 0) > 0,
@@ -45,6 +56,20 @@ function scoreColor(score: number) {
         <span v-if="message.isStreaming" class="cursor" aria-hidden="true" />
       </div>
 
+      <button
+        v-if="!message.isStreaming && message.content"
+        class="copy-btn"
+        aria-label="Copy answer to clipboard"
+        title="Copy"
+        @click="copyContent"
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+        Copy
+      </button>
+
       <!-- Sources -->
       <div v-if="hasSources" class="sources-wrap">
         <button class="sources-toggle" @click="sourcesOpen = !sourcesOpen">
@@ -71,6 +96,7 @@ function scoreColor(score: number) {
                 </svg>
               </div>
               <span class="source-name">{{ src.doc_name }}</span>
+              <span v-if="src.page != null" class="source-page">p.{{ src.page }}</span>
               <span class="source-score" :style="{ color: scoreColor(src.score) }">
                 {{ (src.score * 100).toFixed(0) }}%
               </span>
@@ -179,7 +205,24 @@ function scoreColor(score: number) {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 280px;
 }
+.source-page {
+  font-size: .7rem; font-weight: 600; flex-shrink: 0;
+  color: var(--text-muted); background: var(--bg-alt);
+  padding: 1px 6px; border-radius: var(--radius-pill);
+}
 .source-score { font-size: .76rem; font-weight: 700; flex-shrink: 0; }
+
+/* Copy button */
+.copy-btn {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--bg); color: var(--text-muted);
+  font-size: .72rem; font-weight: 500; cursor: pointer; font-family: inherit;
+  transition: color .15s, border-color .15s; opacity: 0;
+}
+.row-assistant:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: var(--text); border-color: #c8c8d0; }
 
 .source-preview {
   font-size: .78rem; color: var(--text-muted); line-height: 1.55;

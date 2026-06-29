@@ -1,9 +1,11 @@
 import { ref, watch, onUnmounted, type Ref } from 'vue'
+import { wsUrl } from '@/lib/api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface Source {
   doc_name: string
+  page?: number | null
   chunk_preview: string
   score: number
 }
@@ -31,17 +33,12 @@ export function useChatSocket(sessionId: Ref<string | null>) {
 
   // ── Connection helpers ────────────────────────────────────────────────────
 
-  function _wsUrl(sid: string): string {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${proto}//${window.location.host}/ws/chat/${sid}`
-  }
-
   function _connect(sid: string) {
     _teardown()
     wsState.value = 'connecting'
     wsError.value = null
 
-    ws = new WebSocket(_wsUrl(sid))
+    ws = new WebSocket(wsUrl(`/ws/chat/${sid}`))
 
     ws.onopen = () => {
       wsState.value = 'open'

@@ -75,13 +75,30 @@ async def upload_document(
             detail=f"Unknown chunker '{chunker}'. Choose one of: {', '.join(available_chunkers())}",
         )
 
+    content = await file.read()
+
+    # Validate it's actually a PDF: trust neither the extension nor the
+    # client-supplied content-type alone — check the magic bytes too.
+    if file.content_type not in (None, "application/pdf") \
+            or not content.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=415,
+            detail="Only PDF files are accepted (must be a valid PDF).",
+        )
+
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large: limit is {settings.max_upload_mb} MB.",
+        )
+
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     doc_id = str(uuid.uuid4())
     safe_name = Path(file.filename).name if file.filename else "upload.pdf"
     dest = upload_dir / f"{doc_id}_{safe_name}"
 
-    content = await file.read()
     dest.write_bytes(content)
     logger.info(
         "upload received: doc_id=%s name=%s bytes=%d chunker=%s",
@@ -154,12 +171,11 @@ def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     logger.info("delete start: doc_id=%s name=%s", doc_id, doc.name)
-    vs.delete_document(doc_id)
 
-    dest = Path(doc.file_path)
-    if dest.exists():
-        dest.unlink()
-
+    # Delete the DB row FIRST. Only if that commit succeeds do we destroy the
+    # irreversible side effects (vectors, file) — otherwise a FK violation would
+    # leave the row pointing at already-deleted data.
+    file_path = doc.file_path
     try:
         db.delete(doc)
         db.commit()
@@ -170,4 +186,9 @@ def delete_document(
             status_code=409,
             detail="Cannot delete: document is still referenced by one or more chat sessions.",
         )
+
+    vs.delete_document(doc_id)
+    dest = Path(file_path)
+    if dest.exists():
+        dest.unlink()
     logger.info("delete done: doc_id=%s", doc_id)

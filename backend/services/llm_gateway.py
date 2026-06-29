@@ -14,12 +14,12 @@ from config import settings
 
 class LLMGateway:
     def __init__(self) -> None:
-        self._cache: dict[tuple[str, str], BaseChatModel] = {}
+        self._cache: dict[tuple[str, str, float], BaseChatModel] = {}
 
-    def get_llm(self, provider: str, model: str) -> BaseChatModel:
-        key = (provider, model)
+    def get_llm(self, provider: str, model: str, temperature: float = 0.0) -> BaseChatModel:
+        key = (provider, model, temperature)
         if key not in self._cache:
-            self._cache[key] = self._build(provider, model)
+            self._cache[key] = self._build(provider, model, temperature)
         return self._cache[key]
 
     async def stream(self, llm: BaseChatModel, messages: list[BaseMessage]) -> AsyncIterator[str]:
@@ -27,13 +27,25 @@ class LLMGateway:
             if chunk.content:
                 yield str(chunk.content)
 
-    def _build(self, provider: str, model: str) -> BaseChatModel:
+    def _build(self, provider: str, model: str, temperature: float = 0.0) -> BaseChatModel:
+        # Provider SDKs retry transient errors (429/5xx) with exponential backoff;
+        # auth/quota errors fail fast and surface as a clear message to the client.
+        retries = settings.llm_max_retries
         if provider == "openai":
-            return ChatOpenAI(model=model, api_key=settings.openai_api_key, streaming=True, max_retries=0)
+            return ChatOpenAI(
+                model=model, api_key=settings.openai_api_key,
+                streaming=True, temperature=temperature, max_retries=retries,
+            )
         if provider == "google":
-            return ChatGoogleGenerativeAI(model=model, google_api_key=settings.resolved_google_api_key, max_retries=0)
+            return ChatGoogleGenerativeAI(
+                model=model, google_api_key=settings.resolved_google_api_key,
+                temperature=temperature, max_retries=retries,
+            )
         if provider == "anthropic":
-            return ChatAnthropic(model=model, api_key=settings.anthropic_api_key, max_retries=0)
+            return ChatAnthropic(
+                model=model, api_key=settings.anthropic_api_key,
+                temperature=temperature, max_retries=retries,
+            )
         raise ValueError(f"Unknown provider '{provider}'. Use openai | google | anthropic")
 
 

@@ -21,6 +21,8 @@ class RAGConfig:
     top_k: int = 5
     retriever: str = "dense"         # dense | hybrid
     hybrid_alpha: float = 0.5
+    min_score: float = 0.0           # drop retrieved chunks below this score (0 = off)
+    multi_query: int = 0             # generate N query paraphrases for recall (0 = off)
 
     # reranking
     reranker: str = "none"           # none | cross_encoder
@@ -28,6 +30,11 @@ class RAGConfig:
 
     # embedding
     embedder: str = "local"          # local | openai
+
+    # generation
+    temperature: float = 0.0
+    system_prompt: str | None = None     # override the default RAG system prompt
+    max_context_tokens: int = 8000       # budget for retrieved context + history
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))

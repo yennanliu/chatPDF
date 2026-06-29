@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from typing import Any, Optional
 
@@ -7,6 +8,18 @@ import chromadb
 from chromadb.api.types import EmbeddingFunction
 
 from config import settings
+
+logger = logging.getLogger("chatpdf.vector_store")
+
+
+def _log_collection_error(op: str, doc_id: str, exc: Exception) -> None:
+    """Log a Chroma access failure. A missing collection is expected (e.g. the
+    doc is still ingesting), so log it at debug; anything else is a real warning."""
+    msg = str(exc).lower()
+    if "does not exist" in msg or "not found" in msg or "not exist" in msg:
+        logger.debug("%s skipped, no collection for doc_id=%s", op, doc_id)
+    else:
+        logger.warning("%s failed for doc_id=%s: %s", op, doc_id, exc)
 
 
 class VectorStore:
@@ -45,8 +58,8 @@ class VectorStore:
                 dists = r["distances"][0]
                 for text, meta, dist in zip(docs, metas, dists):
                     results.append({"text": text, "metadata": meta, "score": 1 - dist})
-            except Exception:
-                pass
+            except Exception as exc:
+                _log_collection_error("query", doc_id, exc)
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
 
@@ -59,15 +72,15 @@ class VectorStore:
                 r = col.get(include=["documents", "metadatas"])
                 for text, meta in zip(r["documents"], r["metadatas"]):
                     out.append({"text": text, "metadata": meta})
-            except Exception:
-                pass
+            except Exception as exc:
+                _log_collection_error("get_chunks", doc_id, exc)
         return out
 
     def delete_document(self, doc_id: str) -> None:
         try:
             self._client.delete_collection(f"doc_{doc_id}")
-        except Exception:
-            pass
+        except Exception as exc:
+            _log_collection_error("delete", doc_id, exc)
 
 
 @lru_cache(maxsize=1)
@@ -75,6 +88,23 @@ def _chroma_client() -> chromadb.ClientAPI:
     return chromadb.PersistentClient(path=settings.chroma_data_dir)
 
 
+def _resolve_embedding_fn() -> Optional[EmbeddingFunction]:
+    """Pick the embedding function from settings.embedding_backend.
+
+    Returning None lets Chroma use its bundled local all-MiniLM-L6-v2 model.
+    The same function is used for both ingestion and query so vectors always
+    live in one space — switching backends requires re-ingesting documents.
+    """
+    if settings.embedding_backend == "openai":
+        from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+        logger.info("vector store using OpenAI embeddings")
+        return OpenAIEmbeddingFunction(
+            api_key=settings.openai_api_key,
+            model_name="text-embedding-3-small",
+        )
+    return None
+
+
 @lru_cache(maxsize=1)
 def get_vector_store() -> VectorStore:
-    return VectorStore(_chroma_client())
+    return VectorStore(_chroma_client(), embedding_fn=_resolve_embedding_fn())

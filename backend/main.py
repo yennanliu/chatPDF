@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from db import init_db
-from routers import chat_ws, documents, sessions
+from routers import chat_ws, documents, models, sessions
 
 # App-wide logging. basicConfig wires our module loggers to stdout alongside
 # uvicorn's; force=True so it still applies under uvicorn's own log setup.
@@ -28,6 +28,10 @@ async def lifespan(app: FastAPI):
         settings.cors_origins_list,
         settings.upload_dir,
     )
+    if settings.warm_reranker_on_startup:
+        from services.plugins.rerankers import CrossEncoderReranker
+        logger.info("warming cross-encoder reranker…")
+        CrossEncoderReranker().warm()
     yield
 
 
@@ -50,6 +54,7 @@ app.add_middleware(
 app.include_router(documents.router)
 app.include_router(sessions.router)
 app.include_router(chat_ws.router)
+app.include_router(models.router)
 
 
 @app.get("/health", tags=["health"])

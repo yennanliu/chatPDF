@@ -10,15 +10,28 @@ import re
 
 _TOKEN_RE = re.compile(r"\w+")
 
+# Common English function words contribute little to relevance and dominate term
+# frequencies; dropping them sharpens BM25 toward content-bearing terms.
+STOPWORDS: frozenset[str] = frozenset(
+    """a an and are as at be by for from has have he her his in into is it its
+    of on or that the their then there these they this to was were will with you your
+    we our""".split()
+)
+
 
 def tokenize(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
+
+
+def _drop_stopwords(tokens: list[str]) -> list[str]:
+    return [t for t in tokens if t not in STOPWORDS]
 
 
 class BM25:
     def __init__(self, corpus_tokens: list[list[str]], k1: float = 1.5, b: float = 0.75) -> None:
         self.k1 = k1
         self.b = b
+        corpus_tokens = [_drop_stopwords(d) for d in corpus_tokens]
         self.N = len(corpus_tokens)
         self.doc_len = [len(d) for d in corpus_tokens]
         self.avgdl = sum(self.doc_len) / self.N if self.N else 0.0
@@ -38,7 +51,7 @@ class BM25:
         return math.log(1 + (self.N - n + 0.5) / (n + 0.5))
 
     def scores(self, query: str) -> list[float]:
-        q_terms = tokenize(query)
+        q_terms = _drop_stopwords(tokenize(query))
         out: list[float] = []
         for i in range(self.N):
             freqs = self.tf[i]

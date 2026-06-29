@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { api } from '@/lib/api'
 
 export interface MessageOut {
   role: 'user' | 'assistant'
   content: string
-  sources: Array<{ doc_name: string; chunk_preview: string; score: number }> | null
+  sources: Array<{ doc_name: string; page?: number | null; chunk_preview: string; score: number }> | null
   created_at: string
 }
 
@@ -33,14 +34,21 @@ export const useSessionsStore = defineStore('sessions', () => {
   const activeSession = ref<SessionDetail | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const models = ref<Record<string, string[]>>({})
+
+  async function fetchModels(): Promise<void> {
+    try {
+      models.value = await api.get<Record<string, string[]>>('/api/models')
+    } catch {
+      // Non-fatal: the UI falls back to its built-in defaults.
+    }
+  }
 
   async function fetchSessions(): Promise<void> {
     loading.value = true
     error.value = null
     try {
-      const res = await fetch('/api/sessions')
-      if (!res.ok) throw new Error(res.statusText)
-      sessions.value = await res.json()
+      sessions.value = await api.get<Session[]>('/api/sessions')
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
     } finally {
@@ -49,9 +57,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   async function fetchSession(id: string): Promise<SessionDetail> {
-    const res = await fetch(`/api/sessions/${id}`)
-    if (!res.ok) throw new Error(res.statusText)
-    const detail: SessionDetail = await res.json()
+    const detail = await api.get<SessionDetail>(`/api/sessions/${id}`)
     activeSession.value = detail
     return detail
   }
@@ -63,25 +69,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     title?: string
     rag_config?: Record<string, unknown>
   }): Promise<Session> {
-    const res = await fetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) throw new Error(res.statusText)
-    const sess: Session = await res.json()
+    const sess = await api.postJson<Session>('/api/sessions', payload)
     sessions.value.unshift(sess)
     return sess
   }
 
   async function renameSession(id: string, title: string): Promise<void> {
-    const res = await fetch(`/api/sessions/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
-    })
-    if (!res.ok) throw new Error(res.statusText)
-    const updated: Session = await res.json()
+    const updated = await api.patchJson<Session>(`/api/sessions/${id}`, { title })
     const idx = sessions.value.findIndex(s => s.session_id === id)
     if (idx !== -1) sessions.value[idx] = updated
     if (activeSession.value?.session_id === id) {
@@ -90,21 +84,19 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   async function deleteSession(id: string): Promise<void> {
-    const res = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
-    if (!res.ok && res.status !== 404) throw new Error(res.statusText)
+    await api.del(`/api/sessions/${id}`)
     sessions.value = sessions.value.filter(s => s.session_id !== id)
     if (activeSession.value?.session_id === id) activeSession.value = null
   }
 
   async function deleteAllSessions(): Promise<void> {
-    const res = await fetch('/api/sessions', { method: 'DELETE' })
-    if (!res.ok && res.status !== 404) throw new Error(res.statusText)
+    await api.del('/api/sessions')
     sessions.value = []
     activeSession.value = null
   }
 
   return {
-    sessions, activeSession, loading, error,
-    fetchSessions, fetchSession, createSession, renameSession, deleteSession, deleteAllSessions,
+    sessions, activeSession, loading, error, models,
+    fetchModels, fetchSessions, fetchSession, createSession, renameSession, deleteSession, deleteAllSessions,
   }
 })

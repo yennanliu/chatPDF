@@ -12,23 +12,46 @@ const activeSessionId   = ref<string | null>(null)
 const showModal         = ref(false)
 const sessionDrawerOpen = ref(false)
 
+interface RagForm {
+  retriever: 'dense' | 'hybrid'
+  top_k: number
+  hybrid_alpha: number
+  reranker: 'none' | 'cross_encoder'
+  temperature: number
+  multi_query: number
+}
+
 const form = ref({
   doc_ids:  [] as string[],
   provider: 'openai' as 'openai' | 'google' | 'anthropic',
   model:    'gpt-4o',
   title:    '',
 })
-const creating    = ref(false)
-const createError = ref<string | null>(null)
+const rag = ref<RagForm>({
+  retriever: 'dense', top_k: 5, hybrid_alpha: 0.5,
+  reranker: 'none', temperature: 0, multi_query: 0,
+})
+const showAdvanced = ref(false)
+const docSearch    = ref('')
+const creating     = ref(false)
+const createError  = ref<string | null>(null)
 
 // Only indexed documents are eligible to chat against.
 const indexedDocs = computed(() => docStore.documents.filter(d => d.status === 'indexed'))
+const filteredDocs = computed(() => {
+  const q = docSearch.value.trim().toLowerCase()
+  return q ? indexedDocs.value.filter(d => d.name.toLowerCase().includes(q)) : indexedDocs.value
+})
 
-const MODELS: Record<string, string[]> = {
+// Defaults used until the backend catalog (/api/models) loads.
+const FALLBACK_MODELS: Record<string, string[]> = {
   openai:    ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
   google:    ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
   anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
 }
+const MODELS = computed<Record<string, string[]>>(() =>
+  Object.keys(sessStore.models).length ? sessStore.models : FALLBACK_MODELS,
+)
 
 const PROVIDER_META: Record<string, { label: string; color: string; bg: string }> = {
   openai:    { label: 'OpenAI',    color: '#10a37f', bg: 'rgba(16,163,127,.1)' },
@@ -39,6 +62,9 @@ const PROVIDER_META: Record<string, { label: string; color: string; bg: string }
 function openModal() {
   createError.value = null
   form.value = { doc_ids: [], provider: 'openai', model: 'gpt-4o', title: '' }
+  rag.value = { retriever: 'dense', top_k: 5, hybrid_alpha: 0.5, reranker: 'none', temperature: 0, multi_query: 0 }
+  showAdvanced.value = false
+  docSearch.value = ''
   showModal.value = true
 }
 
@@ -52,6 +78,7 @@ async function createSession() {
       provider: form.value.provider,
       model:    form.value.model,
       title:    form.value.title.trim() || undefined,
+      rag_config: { ...rag.value },
     })
     showModal.value        = false
     sessionDrawerOpen.value = false
@@ -64,7 +91,7 @@ async function createSession() {
 }
 
 onMounted(async () => {
-  await Promise.all([sessStore.fetchSessions(), docStore.fetchDocuments()])
+  await Promise.all([sessStore.fetchSessions(), docStore.fetchDocuments(), sessStore.fetchModels()])
   if (!activeSessionId.value && sessStore.sessions.length) {
     activeSessionId.value = sessStore.sessions[0].session_id
   }
@@ -145,11 +172,19 @@ onMounted(async () => {
             <!-- Documents -->
             <div class="field">
               <label class="field-label">Documents <span class="required">*</span></label>
+              <input
+                v-if="indexedDocs.length > 5"
+                v-model="docSearch"
+                class="input"
+                placeholder="Search documents…"
+                aria-label="Search documents"
+              />
               <div v-if="indexedDocs.length" class="doc-picker">
-                <label v-for="doc in indexedDocs" :key="doc.doc_id" class="doc-option">
+                <label v-for="doc in filteredDocs" :key="doc.doc_id" class="doc-option">
                   <input v-model="form.doc_ids" type="checkbox" :value="doc.doc_id" />
                   <span class="doc-option-name">{{ doc.name }}</span>
                 </label>
+                <p v-if="!filteredDocs.length" class="field-hint" style="padding:10px 12px">No matches.</p>
               </div>
               <p v-else class="field-hint warn">
                 No indexed documents yet. <RouterLink to="/">Upload a PDF first.</RouterLink>
@@ -185,6 +220,52 @@ onMounted(async () => {
             <div class="field">
               <label class="field-label">Session title <span class="optional">(optional)</span></label>
               <input v-model="form.title" class="input" placeholder="New Chat" />
+            </div>
+
+            <!-- Advanced RAG config -->
+            <div class="field">
+              <button type="button" class="advanced-toggle" :aria-expanded="showAdvanced" @click="showAdvanced = !showAdvanced">
+                <svg
+                  width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  :style="{ transform: showAdvanced ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }"
+                >
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+                Advanced retrieval settings
+              </button>
+
+              <div v-if="showAdvanced" class="advanced-panel">
+                <div class="adv-row">
+                  <label>Retriever</label>
+                  <select v-model="rag.retriever" class="input">
+                    <option value="dense">Dense (vector)</option>
+                    <option value="hybrid">Hybrid (vector + keyword)</option>
+                  </select>
+                </div>
+                <div v-if="rag.retriever === 'hybrid'" class="adv-row">
+                  <label>Hybrid α <span class="adv-val">{{ rag.hybrid_alpha.toFixed(2) }}</span></label>
+                  <input v-model.number="rag.hybrid_alpha" type="range" min="0" max="1" step="0.05" />
+                </div>
+                <div class="adv-row">
+                  <label>Top K <span class="adv-val">{{ rag.top_k }}</span></label>
+                  <input v-model.number="rag.top_k" type="range" min="1" max="20" step="1" />
+                </div>
+                <div class="adv-row">
+                  <label>Reranker</label>
+                  <select v-model="rag.reranker" class="input">
+                    <option value="none">None</option>
+                    <option value="cross_encoder">Cross-encoder</option>
+                  </select>
+                </div>
+                <div class="adv-row">
+                  <label>Temperature <span class="adv-val">{{ rag.temperature.toFixed(1) }}</span></label>
+                  <input v-model.number="rag.temperature" type="range" min="0" max="1" step="0.1" />
+                </div>
+                <div class="adv-row">
+                  <label>Query expansion <span class="adv-val">{{ rag.multi_query || 'off' }}</span></label>
+                  <input v-model.number="rag.multi_query" type="range" min="0" max="4" step="1" />
+                </div>
+              </div>
             </div>
 
             <div v-if="createError" class="error-msg">{{ createError }}</div>
@@ -334,4 +415,21 @@ onMounted(async () => {
   background: rgba(242,78,30,.08); color: #b93200;
   border-radius: var(--radius-sm); font-size: .84rem;
 }
+
+/* ── Advanced RAG panel ──────────────────────────────────────────────────────── */
+.advanced-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer; padding: 0;
+  font-family: inherit; font-size: .8rem; font-weight: 600; color: var(--text-muted);
+}
+.advanced-toggle:hover { color: var(--text); }
+.advanced-panel {
+  margin-top: 12px; display: flex; flex-direction: column; gap: 12px;
+  padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-alt);
+}
+.adv-row { display: flex; flex-direction: column; gap: 5px; }
+.adv-row label { font-size: .78rem; font-weight: 500; color: var(--text-muted); }
+.adv-row input[type="range"] { width: 100%; accent-color: var(--brand-purple); }
+.adv-val { color: var(--brand-purple); font-weight: 700; }
 </style>

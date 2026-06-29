@@ -30,24 +30,43 @@ class RecursiveChunker(BaseChunker):
 
 
 class SentenceChunker(BaseChunker):
-    """Splits on sentence boundaries — registered for future use."""
+    """Splits on sentence boundaries, packing sentences up to ``chunk_size``.
+
+    When ``chunk_overlap`` > 0, each new chunk is seeded with the trailing
+    sentences of the previous one (up to ~overlap characters) so context isn't
+    lost at chunk boundaries.
+    """
 
     def __init__(self, chunk_size: int = 800, chunk_overlap: int = 0) -> None:
         self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
 
     def split(self, text: str) -> list[str]:
-        sentences = _SENTENCE_RE.split(text)
+        sentences = [s.strip() for s in _SENTENCE_RE.split(text) if s.strip()]
         chunks: list[str] = []
-        current = ""
+        current: list[str] = []
+        cur_len = 0
         for s in sentences:
-            if len(current) + len(s) > self.chunk_size and current:
-                chunks.append(current.strip())
-                current = s
-            else:
-                current = (current + " " + s).strip()
+            if cur_len + len(s) > self.chunk_size and current:
+                chunks.append(" ".join(current))
+                current, cur_len = self._overlap_tail(current)
+            current.append(s)
+            cur_len += len(s) + 1
         if current:
-            chunks.append(current)
+            chunks.append(" ".join(current))
         return chunks
+
+    def _overlap_tail(self, prev: list[str]) -> tuple[list[str], int]:
+        if self.chunk_overlap <= 0:
+            return [], 0
+        tail: list[str] = []
+        tlen = 0
+        for sentence in reversed(prev):
+            if tlen + len(sentence) > self.chunk_overlap:
+                break
+            tail.insert(0, sentence)
+            tlen += len(sentence) + 1
+        return tail, tlen
 
 
 class SemanticChunker(BaseChunker):
