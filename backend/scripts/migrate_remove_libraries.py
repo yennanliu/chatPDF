@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """One-shot migration for the Library removal.
 
-The app self-heals on startup (`init_db` → `_migrate_legacy_schema`), so this
+The app runs versioned migrations on startup (`init_db` → `run_migrations`,
+migration `0001_remove_library`), so this
 script is only needed to migrate a DB without starting the server (e.g. a deploy
 step). It drops the legacy library tables and the unmigratable session/message
 rows — uploaded documents are preserved — then rebuilds the new schema.

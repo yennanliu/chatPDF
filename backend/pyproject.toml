@@ -37,6 +37,15 @@ target-version = "py314"
 select = ["E", "F", "W", "I"]   # pycodestyle + pyflakes + warnings + isort
 ignore = ["E501"]                # line length: already enforced by line-length setting
 
+[tool.ruff.lint.isort]
+# Pin first-party modules so import grouping is identical regardless of the CWD
+# ruff runs from (local backend/ vs CI repo-root) — otherwise auto-detection
+# disagrees and flags I001 only in CI.
+known-first-party = [
+    "config", "db", "main", "migrations", "models",
+    "routers", "services", "tests", "vector_store",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

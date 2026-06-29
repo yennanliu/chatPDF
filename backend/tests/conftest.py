@@ -60,7 +60,7 @@ class _FakeChatModel(BaseChatModel):
 
 
 class FakeLLMGateway(LLMGateway):
-    def get_llm(self, provider: str, model: str) -> BaseChatModel:
+    def get_llm(self, provider: str, model: str, temperature: float = 0.0) -> BaseChatModel:
         return _FakeChatModel()
 
 

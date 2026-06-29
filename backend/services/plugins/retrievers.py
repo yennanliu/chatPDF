@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import TYPE_CHECKING
 
 from .base import BaseRetriever
@@ -34,9 +35,29 @@ class HybridRetriever(BaseRetriever):
         self._vs = vs
         self._alpha = alpha
 
-    def search(self, query: str, top_k: int, doc_ids: list[str]) -> list[dict]:
+    # Build cost is O(corpus); cache the index so repeated queries over the same
+    # documents (e.g. a chat session) don't rebuild BM25 every turn. Bounded LRU —
+    # otherwise distinct doc-id combinations would accumulate forever in a
+    # long-running server (each entry holds a whole BM25 index).
+    _bm25_cache: OrderedDict[tuple, tuple[int, object]] = OrderedDict()
+    _BM25_CACHE_MAX = 64
+
+    def _bm25(self, doc_ids: list[str], corpus: list[dict]):
         from .sparse import BM25, tokenize
 
+        cache_key = tuple(sorted(doc_ids))
+        cached = self._bm25_cache.get(cache_key)
+        if cached and cached[0] == len(corpus):
+            self._bm25_cache.move_to_end(cache_key)   # mark most-recently-used
+            return cached[1]
+        index = BM25([tokenize(c["text"]) for c in corpus])
+        self._bm25_cache[cache_key] = (len(corpus), index)
+        self._bm25_cache.move_to_end(cache_key)
+        while len(self._bm25_cache) > self._BM25_CACHE_MAX:
+            self._bm25_cache.popitem(last=False)       # evict least-recently-used
+        return index
+
+    def search(self, query: str, top_k: int, doc_ids: list[str]) -> list[dict]:
         corpus = self._vs.get_chunks(doc_ids)
         if not corpus:
             return []
@@ -46,7 +67,7 @@ class HybridRetriever(BaseRetriever):
         dense_by_key = {_key(d["metadata"]): d["score"] for d in dense}
 
         # Sparse (BM25) score for every chunk.
-        sparse = BM25([tokenize(c["text"]) for c in corpus]).scores(query)
+        sparse = self._bm25(doc_ids, corpus).scores(query)
         sparse_by_key = {_key(c["metadata"]): s for c, s in zip(corpus, sparse)}
 
         dnorm = _minmax(dense_by_key)

@@ -70,6 +70,30 @@ const statusLabel = computed(() => {
 const showReconnectBanner = computed(() =>
   wsState.value === 'error' || (wsState.value === 'closed' && messages.value.length > 0),
 )
+
+function exportConversation() {
+  const title = currentSession.value?.title ?? 'chat'
+  const lines = [`# ${title}`, '']
+  for (const m of messages.value) {
+    lines.push(m.role === 'user' ? `## 🧑 You` : `## 🤖 Assistant`)
+    lines.push('', m.content, '')
+    if (m.sources?.length) {
+      lines.push('**Sources:**')
+      for (const s of m.sources) {
+        const page = s.page != null ? ` (p.${s.page})` : ''
+        lines.push(`- ${s.doc_name}${page} — ${(s.score * 100).toFixed(0)}%`)
+      }
+      lines.push('')
+    }
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${title.replace(/[^\w-]+/g, '_')}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
@@ -94,6 +118,18 @@ const showReconnectBanner = computed(() =>
         <span v-if="currentSession" class="meta-chip">
           {{ currentSession.provider }} · {{ currentSession.model }}
         </span>
+        <button
+          v-if="messages.length"
+          class="btn btn-icon btn-ghost btn-sm"
+          title="Export conversation as Markdown"
+          aria-label="Export conversation as Markdown"
+          @click="exportConversation"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
         <span v-if="wsState === 'error'" class="status-error">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -148,6 +184,7 @@ const showReconnectBanner = computed(() =>
           class="send-btn"
           :class="{ streaming: isStreaming }"
           :disabled="!query.trim() || isStreaming"
+          aria-label="Send message"
           @click="handleSend"
         >
           <span v-if="isStreaming" class="spinner" style="width:15px;height:15px" />

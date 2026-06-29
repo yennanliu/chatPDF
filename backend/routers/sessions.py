@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from dataclasses import asdict
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,11 +10,28 @@ from pydantic import BaseModel
 from sqlmodel import Session as DBSession
 from sqlmodel import select
 
+from config import settings
 from db import get_db
 from models.tables import Document, Message, SessionDocument
 from models.tables import Session as SessionModel
+from services.model_catalog import is_valid_provider, known_providers
+from services.rag_config import RAGConfig
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+logger = logging.getLogger("chatpdf.sessions")
+
+
+def _parse_sources(raw: str | None) -> list[dict] | None:
+    """Defensively parse the stored sources JSON — a malformed blob must not 500
+    a session read."""
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, list) else None
+    except (ValueError, TypeError):
+        logger.warning("could not parse message.sources JSON; returning null")
+        return None
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -60,7 +79,7 @@ def _msg_out(m: Message) -> MessageOut:
     return MessageOut(
         role=m.role,
         content=m.content,
-        sources=json.loads(m.sources) if m.sources else None,
+        sources=_parse_sources(m.sources),
         created_at=m.created_at.isoformat(),
     )
 
@@ -80,7 +99,9 @@ def _session_out(s: SessionModel, docs: list[Document]) -> SessionOut:
         session_id=s.id,
         title=s.title,
         documents=[DocumentSnippet(doc_id=d.id, name=d.name, status=d.status) for d in docs],
-        rag_config=json.loads(s.rag_config or "{}"),
+        # Normalize through RAGConfig so the response is always a complete, valid
+        # config (defaults filled, unknown keys dropped) — never a raw/legacy blob.
+        rag_config=asdict(RAGConfig.from_json(s.rag_config)),
         provider=s.provider,
         model=s.model,
         created_at=s.created_at.isoformat(),
@@ -91,7 +112,20 @@ def _session_out(s: SessionModel, docs: list[Document]) -> SessionOut:
 
 @router.post("", status_code=201, response_model=SessionOut)
 def create_session(body: SessionCreate, db: DBSession = Depends(get_db)):
-    for doc_id in body.doc_ids:
+    if not is_valid_provider(body.provider):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown provider '{body.provider}'. Choose one of: {', '.join(known_providers())}",
+        )
+    # Dedupe (preserving order): SessionDocument has a composite PK
+    # (session_id, document_id), so a repeated doc_id would IntegrityError on commit.
+    doc_ids = list(dict.fromkeys(body.doc_ids))
+    if len(doc_ids) > settings.max_docs_per_session:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Too many documents: limit is {settings.max_docs_per_session} per session.",
+        )
+    for doc_id in doc_ids:
         if not db.get(Document, doc_id):
             raise HTTPException(status_code=404, detail=f"Document not found: {doc_id}")
     session = SessionModel(
@@ -103,7 +137,7 @@ def create_session(body: SessionCreate, db: DBSession = Depends(get_db)):
     db.add(session)
     db.commit()
     db.refresh(session)
-    for doc_id in body.doc_ids:
+    for doc_id in doc_ids:
         db.add(SessionDocument(session_id=session.id, document_id=doc_id))
     db.commit()
     return _session_out(session, _session_docs(session.id, db))

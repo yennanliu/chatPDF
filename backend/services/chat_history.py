@@ -8,12 +8,16 @@ from sqlmodel import Session, select
 from models.tables import Message
 
 
-def get_history(session_id: str, db: Session) -> list[BaseMessage]:
-    rows = db.exec(
-        select(Message)
-        .where(Message.session_id == session_id)
-        .order_by(Message.created_at)
-    ).all()
+def get_history(session_id: str, db: Session, limit: int | None = None) -> list[BaseMessage]:
+    """Return prior messages oldest→newest. If ``limit`` is given, only the most
+    recent ``limit`` messages are returned (windowing keeps the prompt bounded)."""
+    stmt = select(Message).where(Message.session_id == session_id)
+    if limit is not None:
+        # Take the newest `limit` rows, then restore chronological order.
+        rows = list(db.exec(stmt.order_by(Message.created_at.desc()).limit(limit)).all())
+        rows.reverse()
+    else:
+        rows = list(db.exec(stmt.order_by(Message.created_at)).all())
     result: list[BaseMessage] = []
     for row in rows:
         if row.role == "user":

@@ -100,10 +100,23 @@ chunk-ID coupling that breaks when you re-chunk).
 
 ---
 
-## 5. A minimal offline harness (proposed)
+## 5. The eval harness
 
-This repo has no eval harness yet — this is the **highest-leverage next build**,
-because it unblocks tuning every other knob with evidence.
+**Now built.** Two entry points share the same metric core (`services/eval.py`):
+
+- **Live, in-app** — the **RAG Evaluation** page (`frontend/src/views/EvalView.vue`,
+  backed by `routers/eval.py`). Define a gold set in the browser, pick which
+  `RAGConfig` variants to compare (presets in `GET /api/eval/presets`), and
+  `POST /api/eval/run` returns a side-by-side metrics table + per-question
+  drill-down. Retrieval metrics need no API key; the LLM-judge half (§3) is an
+  opt-in toggle and degrades gracefully when no key is configured.
+- **Offline CLI** — `scripts/eval_retrieval.py` for chunk-id gold sets in CI.
+
+Gold sets persist to `eval/gold.json` (`EVAL_GOLD_PATH`). The live runner matches
+retrieved chunks against `relevant_substrings` (label-free, §4) rather than
+brittle chunk ids, so it survives re-chunking.
+
+The original sketch below documents the design.
 
 ```
 eval/

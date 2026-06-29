@@ -63,6 +63,14 @@ async def test_create_session_no_docs_ok(client):
     assert sess["documents"] == []
 
 
+async def test_create_session_dedupes_duplicate_doc_ids(client, sample_pdf):
+    # Duplicate doc_ids would hit the composite PK (session_id, document_id) and
+    # IntegrityError on commit — the route must dedupe instead of 500ing.
+    doc_id = await _upload_doc(client, sample_pdf=sample_pdf)
+    sess = await _make_session(client, [doc_id, doc_id])
+    assert [d["doc_id"] for d in sess["documents"]] == [doc_id]
+
+
 async def test_create_session_unknown_doc_404(client):
     r = await client.post("/api/sessions", json={
         "doc_ids": ["no-such-doc"],

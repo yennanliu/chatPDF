@@ -100,6 +100,36 @@ def test_hybrid_surfaces_keyword_chunk_dense_misses():
     assert out[0]["text"] == "the rare_term appears here"
 
 
+# ── BM25 cache bound (memory-leak guard) ──────────────────────────────────────
+
+def test_bm25_cache_is_bounded_lru():
+    HybridRetriever._bm25_cache.clear()
+    r = HybridRetriever(MagicMock())
+    cap = HybridRetriever._BM25_CACHE_MAX
+    # Insert more distinct doc-id combinations than the cap.
+    for i in range(cap + 10):
+        r._bm25([f"d{i}"], [{"text": "some text", "metadata": {}}])
+    assert len(HybridRetriever._bm25_cache) == cap
+    # Oldest keys were evicted; the most recent insert is retained.
+    assert (f"d{cap + 9}",) in HybridRetriever._bm25_cache
+    assert ("d0",) not in HybridRetriever._bm25_cache
+    HybridRetriever._bm25_cache.clear()
+
+
+def test_bm25_cache_hit_refreshes_recency():
+    HybridRetriever._bm25_cache.clear()
+    r = HybridRetriever(MagicMock())
+    cap = HybridRetriever._BM25_CACHE_MAX
+    corpus = [{"text": "x", "metadata": {}}]
+    r._bm25(["keep"], corpus)
+    # Touch "keep" after filling the cache so it's most-recently-used, not evicted.
+    for i in range(cap):
+        r._bm25([f"d{i}"], corpus)
+        r._bm25(["keep"], corpus)
+    assert ("keep",) in HybridRetriever._bm25_cache
+    HybridRetriever._bm25_cache.clear()
+
+
 # ── Wiring ────────────────────────────────────────────────────────────────────
 
 def test_build_retriever_threads_alpha():

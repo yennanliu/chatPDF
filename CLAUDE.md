@@ -77,10 +77,15 @@ Always commit `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 | `backend/services/llm_gateway.py` | Multi-LLM abstraction (OpenAI / Gemini / Claude) |
 | `backend/services/ingestion.py` | PDF → chunks → ChromaDB |
 | `backend/services/chat_history.py` | SQLite message read/write |
+| `backend/services/eval.py` | Pure retrieval metrics (Hit@k, Recall@k, MRR, nDCG@k, Precision@k) + substring scorer |
+| `backend/services/eval_runner.py` | Live eval runner — drives the RAG path over a gold set per config variant |
+| `backend/services/judge.py` | LLM-as-judge (faithfulness / answer-relevance) for generation quality |
 | `backend/services/plugins/` | Chunker / Embedder / Retriever / Reranker plugins |
 | `backend/routers/documents.py` | `POST /api/documents/upload`, `GET`, `GET /{id}/status`, `DELETE` |
 | `backend/routers/sessions.py` | Session CRUD — each session owns its `doc_ids` + `rag_config` |
 | `backend/routers/chat_ws.py` | `WS /ws/chat/{session_id}` — streaming chat |
+| `backend/routers/eval.py` | `GET/PUT /api/eval/gold`, `GET /api/eval/presets`, `POST /api/eval/run` |
+| `frontend/src/views/EvalView.vue` | RAG Evaluation page — gold-set editor, config comparison, metrics + drill-down |
 | `backend/tests/conftest.py` | Fixtures: `client`, `ws_client`, `test_vs`, `FakeLLMGateway` |
 
 ---
