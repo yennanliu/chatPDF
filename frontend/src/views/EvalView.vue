@@ -86,10 +86,11 @@ const baseCols: Col[] = [
   { key: 'p50_latency_ms', label: 'p50 lat', suffix: ' ms', higher: false },
 ]
 const judgeCols: Col[] = [
-  { key: 'context_precision', label: 'Ctx prec', pct: true, higher: true },
-  { key: 'context_recall',    label: 'Ctx rec',  pct: true, higher: true },
-  { key: 'faithfulness',      label: 'Faithful', pct: true, higher: true },
-  { key: 'answer_relevance',  label: 'Ans rel',  pct: true, higher: true },
+  { key: 'context_precision',  label: 'Ctx prec', pct: true, higher: true },
+  { key: 'context_recall',     label: 'Ctx rec',  pct: true, higher: true },
+  { key: 'faithfulness',       label: 'Faithful', pct: true, higher: true },
+  { key: 'answer_relevance',   label: 'Ans rel',  pct: true, higher: true },
+  { key: 'answer_correctness', label: 'Ans corr', pct: true, higher: true },
 ]
 const columns = computed<Col[]>(() =>
   evalStore.result?.judge_enabled ? [...baseCols, ...judgeCols] : baseCols,
@@ -142,6 +143,7 @@ const trendOptions: { key: keyof Metrics; label: string }[] = [
   { key: 'context_recall', label: 'Context recall' },
   { key: 'faithfulness', label: 'Faithfulness' },
   { key: 'answer_relevance', label: 'Answer relevance' },
+  { key: 'answer_correctness', label: 'Answer correctness' },
 ]
 const trendMetric = ref<keyof Metrics>('ndcg@k')
 

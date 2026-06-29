@@ -69,4 +69,5 @@ class Message(SQLModel, table=True):
     role: str  # user | assistant
     content: str
     sources: Optional[str] = None  # JSON: [{doc_name, chunk_preview, score}]
+    metrics: Optional[str] = None  # JSON per-response quality scores (assistant only)
     created_at: datetime = Field(default_factory=_now)

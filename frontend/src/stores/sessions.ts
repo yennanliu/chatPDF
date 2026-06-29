@@ -6,6 +6,13 @@ export interface MessageOut {
   role: 'user' | 'assistant'
   content: string
   sources: Array<{ doc_name: string; page?: number | null; chunk_preview: string; score: number }> | null
+  metrics: {
+    confidence: number | null
+    retrieval_confidence: number | null
+    context_precision: number | null
+    faithfulness: number | null
+    answer_relevance: number | null
+  } | null
   created_at: string
 }
 

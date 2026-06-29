@@ -49,8 +49,20 @@ def _0001_remove_library(conn: Connection) -> None:
         conn.execute(text("DROP TABLE IF EXISTS session"))
 
 
+def _0002_add_message_metrics(conn: Connection) -> None:
+    """Add the ``metrics`` column to ``message`` (per-response quality scores).
+
+    ``create_all`` is additive at the table level only — it won't add a column to
+    an existing table — so an established DB needs this ALTER. Idempotent: skip
+    when the column is already present (or the table doesn't exist yet)."""
+    cols = conn.execute(text("PRAGMA table_info('message')")).fetchall()
+    if cols and not any(row[1] == "metrics" for row in cols):
+        conn.execute(text("ALTER TABLE message ADD COLUMN metrics TEXT"))
+
+
 MIGRATIONS: list[Migration] = [
     Migration("0001_remove_library", "Drop legacy Library tables/columns", _0001_remove_library),
+    Migration("0002_add_message_metrics", "Add message.metrics column", _0002_add_message_metrics),
 ]
 
 

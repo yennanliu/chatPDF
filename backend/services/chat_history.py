@@ -33,6 +33,7 @@ def save_turn(
     assistant_text: str,
     sources: list[dict],
     db: Session,
+    metrics: dict | None = None,
 ) -> None:
     db.add(Message(session_id=session_id, role="user", content=user_text))
     db.add(Message(
@@ -40,5 +41,6 @@ def save_turn(
         role="assistant",
         content=assistant_text,
         sources=json.dumps(sources),
+        metrics=json.dumps(metrics) if metrics else None,
     ))
     db.commit()

@@ -58,6 +58,19 @@ no API calls, fast, fully reproducible. **This is where to spend first.**
 
 ---
 
+### Per-response scoring on live chat (no gold needed)
+
+Every chat answer is scored *after* it finishes streaming (non-blocking — the
+answer shows immediately, scores arrive a beat later as a `metrics` WS frame and
+are persisted on the message). Because a live turn has **no ground truth**, only
+label-free metrics are shown — `services/response_metrics.py` runs one combined
+judge call for **faithfulness**, **answer relevance**, and **context precision**,
+plus a **retrieval confidence** from the cross-encoder relevance scores, blended
+into a single **confidence** = mean of the available components. The
+gold-dependent IR metrics (Hit/Recall/Precision/MRR) and **answer correctness**
+are *not* computable per live turn — they live on the Evaluation page, where a
+gold set (and reference answers) exist. Toggle with `CHAT_RESPONSE_SCORING`.
+
 ### Context precision & recall (label-free, LLM-judged)
 
 Beyond the substring metrics (which need hand-authored `relevant_substrings`),

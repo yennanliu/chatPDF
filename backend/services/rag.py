@@ -226,5 +226,7 @@ async def run_rag_stream(
         if chunk.content:
             yield str(chunk.content)
 
-    # 4. Emit done sentinel with source citations
-    yield {"__done__": True, "sources": sources_from_context(context)}
+    # 4. Emit done sentinel with source citations. `context` carries the full
+    # retrieved chunks for post-stream response scoring; the caller strips it
+    # before sending the client-facing done frame.
+    yield {"__done__": True, "sources": sources_from_context(context), "context": context}

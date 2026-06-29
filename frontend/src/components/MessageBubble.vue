@@ -7,6 +7,29 @@ const props = defineProps<{ message: ChatMessage }>()
 const toast = useToast()
 
 const sourcesOpen = ref(false)
+const metricsOpen = ref(false)
+
+// Quality scores arrive a moment after the answer finishes streaming.
+const metrics = computed(() => props.message.metrics)
+const hasMetrics = computed(
+  () => !props.message.isStreaming && metrics.value != null && metrics.value.confidence != null,
+)
+const confidencePct = computed(() =>
+  metrics.value?.confidence != null ? Math.round(metrics.value.confidence * 100) : null,
+)
+const subMetrics = computed(() => {
+  const m = metrics.value
+  if (!m) return []
+  return [
+    { label: 'Faithfulness', value: m.faithfulness },
+    { label: 'Answer relevance', value: m.answer_relevance },
+    { label: 'Context precision', value: m.context_precision },
+    { label: 'Retrieval', value: m.retrieval_confidence },
+  ]
+})
+function pct(v: number | null | undefined): string {
+  return v == null ? '—' : `${Math.round(v * 100)}%`
+}
 
 async function copyContent() {
   try {
@@ -103,6 +126,34 @@ function scoreColor(score: number) {
             </div>
             <p class="source-preview">{{ truncate(src.chunk_preview) }}</p>
           </div>
+        </div>
+      </div>
+
+      <!-- Response quality (label-free, scored after streaming) -->
+      <div v-if="hasMetrics" class="metrics-wrap">
+        <button class="metrics-toggle" @click="metricsOpen = !metricsOpen">
+          <span class="conf-dot" :style="{ background: scoreColor(metrics!.confidence!) }" />
+          Confidence <strong :style="{ color: scoreColor(metrics!.confidence!) }">{{ confidencePct }}%</strong>
+          <svg
+            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            :style="{ transform: metricsOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }"
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+
+        <div v-if="metricsOpen" class="metrics-list">
+          <div v-for="m in subMetrics" :key="m.label" class="metric-row">
+            <span class="metric-label">{{ m.label }}</span>
+            <span class="metric-bar">
+              <span
+                class="metric-fill"
+                :style="{ width: ((m.value ?? 0) * 100) + '%', background: scoreColor(m.value ?? 0) }"
+              />
+            </span>
+            <span class="metric-val">{{ pct(m.value) }}</span>
+          </div>
+          <p class="metrics-note">Label-free scores (no ground truth). Confidence = mean of the above.</p>
         </div>
       </div>
     </div>
@@ -211,6 +262,35 @@ function scoreColor(score: number) {
   padding: 1px 6px; border-radius: var(--radius-pill);
 }
 .source-score { font-size: .76rem; font-weight: 700; flex-shrink: 0; }
+
+/* ── Response quality ────────────────────────────────────────────────────────── */
+.metrics-wrap { display: flex; flex-direction: column; gap: 6px; }
+.metrics-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  background: var(--bg-alt); border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-pill); cursor: pointer;
+  font-size: .76rem; font-weight: 600; font-family: inherit;
+  align-self: flex-start; transition: background .15s;
+}
+.metrics-toggle:hover { background: var(--bg); }
+.metrics-toggle strong { font-variant-numeric: tabular-nums; }
+.conf-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.metrics-list {
+  display: flex; flex-direction: column; gap: 7px;
+  max-width: min(420px, 78vw);
+  padding: 11px 13px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);
+}
+.metric-row { display: flex; align-items: center; gap: 9px; font-size: .76rem; }
+.metric-label { flex: 0 0 116px; color: var(--text-muted); }
+.metric-bar { flex: 1; height: 6px; background: var(--bg-alt); border-radius: 3px; overflow: hidden; }
+.metric-fill { display: block; height: 100%; border-radius: 3px; transition: width .3s; }
+.metric-val { flex: 0 0 36px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+.metrics-note { font-size: .68rem; color: var(--text-muted); margin: 2px 0 0; }
 
 /* Copy button */
 .copy-btn {

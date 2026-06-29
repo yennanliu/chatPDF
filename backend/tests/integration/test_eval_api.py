@@ -161,7 +161,7 @@ class _JsonGateway(LLMGateway):
         # context_* pair), ignoring the extras.
         return _FakeChatModel(response=(
             '{"faithfulness": 0.9, "answer_relevance": 0.8, '
-            '"context_precision": 0.7, "context_recall": 0.6}'
+            '"context_precision": 0.7, "context_recall": 0.6, "answer_correctness": 0.95}'
         ))
 
 
@@ -194,6 +194,8 @@ async def test_run_with_judge_scores_generation(client, test_vs, gold_path, monk
     # Label-free retrieval-quality metrics scored by the context judge.
     assert res["metrics"]["context_precision"] == 0.7
     assert res["metrics"]["context_recall"] == 0.6
+    # Answer correctness vs. the gold reference answer.
+    assert res["metrics"]["answer_correctness"] == 0.95
     assert res["per_question"][0]["answer"] is not None
     assert res["per_question"][0]["context_precision"] == 0.7
 

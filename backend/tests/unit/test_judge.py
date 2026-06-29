@@ -5,7 +5,7 @@ must be robust to the usual LLM output noise (code fences, stray prose).
 """
 from __future__ import annotations
 
-from services.judge import judge_context, parse_judge_response
+from services.judge import judge_context, judge_correctness, judge_response, parse_judge_response
 from tests.conftest import _FakeChatModel
 
 
@@ -57,3 +57,28 @@ def test_judge_context_clamps_and_handles_garbage():
     clamped = judge_context("q?", ["c"], "ref",
                             _FakeChatModel(response='{"context_precision": 1.3, "context_recall": -1}'))
     assert clamped == {"context_precision": 1.0, "context_recall": 0.0}
+
+
+# ── live combined judge + answer correctness ───────────────────────────────────
+
+def test_judge_response_scores_three_axes_in_one_call():
+    llm = _FakeChatModel(
+        response='{"faithfulness": 0.9, "answer_relevance": 0.8, "context_precision": 0.7}'
+    )
+    out = judge_response("q?", ["ctx"], "the answer", llm)
+    assert out == {"faithfulness": 0.9, "answer_relevance": 0.8, "context_precision": 0.7}
+
+
+def test_judge_response_none_on_garbage():
+    assert judge_response("q?", ["ctx"], "ans", _FakeChatModel(response="no json")) is None
+
+
+def test_judge_correctness_scores_against_reference():
+    llm = _FakeChatModel(response='{"answer_correctness": 0.85}')
+    assert judge_correctness("q?", "the answer", "the reference", llm) == 0.85
+
+
+def test_judge_correctness_none_without_reference():
+    # No reference → not scorable, no LLM call needed.
+    assert judge_correctness("q?", "the answer", None, _FakeChatModel(response="x")) is None
+    assert judge_correctness("q?", "the answer", "  ", _FakeChatModel(response="x")) is None

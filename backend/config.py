@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     max_history_messages: int = 20    # window chat history (≈10 turns) into context
     llm_max_retries: int = 2          # provider-SDK retries for transient errors
     warm_reranker_on_startup: bool = False  # preload cross-encoder at boot (slow start)
+    chat_response_scoring: bool = True  # judge each chat answer after streaming (extra LLM call/turn)
 
 
 settings = Settings()

@@ -60,6 +60,42 @@ CONTEXT:
 
 _RECALL_LINE = '- "context_recall": how fully the CONTEXT covers the information needed to support the REFERENCE ANSWER. 1.0 = every fact in the reference answer is grounded in the context; 0.0 = none are.\n'
 
+_RESPONSE_PROMPT = """You are a strict, impartial RAG grader. Score the ANSWER and the retrieved CONTEXT for the QUESTION on three axes, each from 0.0 to 1.0:
+
+- "faithfulness": the fraction of the answer's factual claims supported by the CONTEXT. 1.0 = every claim is grounded; 0.0 = the answer invents or contradicts facts.
+- "answer_relevance": how directly the answer addresses the QUESTION. 1.0 = fully on-topic and complete; 0.0 = evasive or off-topic.
+- "context_precision": the fraction of the CONTEXT passages that are relevant to the QUESTION. 1.0 = all useful; 0.0 = all noise.
+
+Judge ONLY against the provided context. Reply with a single JSON object and nothing else:
+{{"faithfulness": <float>, "answer_relevance": <float>, "context_precision": <float>}}
+
+QUESTION:
+{question}
+
+CONTEXT:
+{context}
+
+ANSWER:
+{answer}
+"""
+
+_RESPONSE_KEYS = ("faithfulness", "answer_relevance", "context_precision")
+
+_CORRECTNESS_PROMPT = """You are a strict grader of answer correctness. Compare the ANSWER to the REFERENCE ANSWER for the QUESTION. Score "answer_correctness" from 0.0 to 1.0: 1.0 = factually equivalent to / fully captures the reference; ~0.5 = partially correct or missing key facts; 0.0 = incorrect or contradicts the reference. Minor wording differences do not matter — judge the facts.
+
+Reply with a single JSON object and nothing else:
+{{"answer_correctness": <float>}}
+
+QUESTION:
+{question}
+
+REFERENCE ANSWER:
+{reference}
+
+ANSWER:
+{answer}
+"""
+
 
 def _clamp(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
@@ -159,3 +195,45 @@ def judge_context(
         "context_precision": parsed["context_precision"],
         "context_recall": parsed.get("context_recall"),
     }
+
+
+def judge_response(
+    question: str,
+    context_texts: list[str],
+    answer: str,
+    llm: BaseChatModel,
+    config: dict | None = None,
+) -> dict | None:
+    """Score a *live* response on three label-free axes in one call (cheap enough
+    for the chat hot path): faithfulness, answer_relevance, context_precision.
+    Returns the parsed scores, or None if the call fails / can't be parsed."""
+    context = "\n\n".join(context_texts) or "No context retrieved."
+    prompt = _RESPONSE_PROMPT.format(question=question, context=context, answer=answer)
+    try:
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
+    except Exception as exc:
+        logger.warning("response judge call failed: %s", exc)
+        return None
+    return _parse_scores(str(resp.content), _RESPONSE_KEYS)
+
+
+def judge_correctness(
+    question: str,
+    answer: str,
+    reference_answer: str | None,
+    llm: BaseChatModel,
+    config: dict | None = None,
+) -> float | None:
+    """Grade answer correctness against a REFERENCE answer (RAGAs answer
+    correctness). Returns a float in [0, 1], or None when there is no reference
+    or the call fails / can't be parsed."""
+    if not (reference_answer and reference_answer.strip()):
+        return None
+    prompt = _CORRECTNESS_PROMPT.format(question=question, reference=reference_answer, answer=answer)
+    try:
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
+    except Exception as exc:
+        logger.warning("correctness judge call failed: %s", exc)
+        return None
+    parsed = _parse_scores(str(resp.content), ("answer_correctness",))
+    return parsed["answer_correctness"] if parsed else None

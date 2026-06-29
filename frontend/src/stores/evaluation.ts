@@ -40,6 +40,7 @@ export interface QuestionResult {
   answer: string | null
   faithfulness: number | null
   answer_relevance: number | null
+  answer_correctness: number | null
   context_precision: number | null
   context_recall: number | null
 }
@@ -55,6 +56,7 @@ export interface Metrics {
   context_recall: number | null
   faithfulness: number | null
   answer_relevance: number | null
+  answer_correctness: number | null
 }
 
 export interface VariantResult {

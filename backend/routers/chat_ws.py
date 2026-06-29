@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -11,7 +12,7 @@ from config import settings
 from db import get_db
 from models.tables import Session as SessionModel
 from models.tables import SessionDocument
-from services import tracing
+from services import response_metrics, tracing
 from services.chat_history import get_history, save_turn
 from services.llm_gateway import LLMGateway, get_llm_gateway
 from services.rag import run_rag_stream
@@ -82,6 +83,7 @@ async def chat_ws(
 
             tokens: list[str] = []
             sources: list[dict] = []
+            context: list[dict] = []
             # Trace this turn to Langfuse (no-op / None when tracing is disabled).
             trace_config = tracing.chat_config(session_id)
 
@@ -89,6 +91,7 @@ async def chat_ws(
                 async for item in run_rag_stream(query, doc_ids, history, rag_config, vs, llm, trace_config):
                     if isinstance(item, dict) and item.get("__done__"):
                         sources = item["sources"]
+                        context = item.get("context", [])
                         await websocket.send_json({"type": "done", "sources": sources})
                     else:
                         tokens.append(item)
@@ -101,7 +104,23 @@ async def chat_ws(
                 await websocket.send_json({"type": "error", "detail": _friendly_error(exc)})
                 continue
 
-            save_turn(session_id, query, "".join(tokens), sources, db)
+            answer = "".join(tokens)
+
+            # Score the response after streaming (non-blocking for the user — the
+            # answer is already shown). Best-effort: a scoring failure must never
+            # break the turn. The judge call is sync, so run it off the event loop.
+            metrics: dict | None = None
+            if settings.chat_response_scoring and answer.strip():
+                try:
+                    judge_llm = llm_gw.get_llm(session.provider, session.model, 0.0)
+                    metrics = await asyncio.to_thread(
+                        response_metrics.score_response, query, context, answer, judge_llm, trace_config
+                    )
+                    await websocket.send_json({"type": "metrics", "data": metrics})
+                except Exception:
+                    logger.warning("response scoring failed: session_id=%s", session_id, exc_info=True)
+
+            save_turn(session_id, query, answer, sources, db, metrics=metrics)
 
     except WebSocketDisconnect:
         pass

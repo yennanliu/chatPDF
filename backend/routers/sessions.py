@@ -58,6 +58,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
     sources: list[dict] | None = None
+    metrics: dict | None = None
     created_at: str
 
 
@@ -75,11 +76,24 @@ class SessionDetailOut(SessionOut):
     messages: list[MessageOut]
 
 
+def _parse_metrics(raw: str | None) -> dict | None:
+    """Parse stored per-response metrics JSON; a malformed blob yields null."""
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else None
+    except (ValueError, TypeError):
+        logger.warning("could not parse message.metrics JSON; returning null")
+        return None
+
+
 def _msg_out(m: Message) -> MessageOut:
     return MessageOut(
         role=m.role,
         content=m.content,
         sources=_parse_sources(m.sources),
+        metrics=_parse_metrics(m.metrics),
         created_at=m.created_at.isoformat(),
     )
 

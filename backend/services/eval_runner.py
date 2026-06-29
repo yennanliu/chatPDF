@@ -100,6 +100,7 @@ def _eval_variant(
                 "answer": None,
                 "faithfulness": None,
                 "answer_relevance": None,
+                "answer_correctness": None,
                 "context_precision": None,
                 "context_recall": None,
             }
@@ -121,6 +122,10 @@ def _eval_variant(
                     if verdict:
                         row["faithfulness"] = verdict["faithfulness"]
                         row["answer_relevance"] = verdict["answer_relevance"]
+                    # Answer correctness vs. the gold reference answer (when present).
+                    row["answer_correctness"] = judge_mod.judge_correctness(
+                        question, answer, item.get("reference_answer"), judge_llm, scope.config
+                    )
                 except Exception:
                     logger.exception("generation/judge failed for question=%r variant=%s", question, label)
 
@@ -141,6 +146,7 @@ def _eval_variant(
             "context_recall": _opt_mean("context_recall"),
             "faithfulness": _opt_mean("faithfulness"),
             "answer_relevance": _opt_mean("answer_relevance"),
+            "answer_correctness": _opt_mean("answer_correctness"),
         }
         scope.score(metrics)
 

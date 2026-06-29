@@ -125,9 +125,10 @@ scores for trend tracking. The Evaluation page also charts metrics in-app
 { "query": "What does the paper say about X?" }
 
 # Server streams:
-{ "type": "token",  "data": "The" }       ← repeated per token
-{ "type": "done",   "sources": [...] }    ← final frame with citations
-{ "type": "error",  "detail": "..." }     ← on failure
+{ "type": "token",   "data": "The" }       ← repeated per token
+{ "type": "done",    "sources": [...] }    ← citations frame (answer complete)
+{ "type": "metrics", "data": {...} }       ← non-blocking quality scores (after done; CHAT_RESPONSE_SCORING)
+{ "type": "error",   "detail": "..." }     ← on failure
 ```
 
 Session (`session_id` in URL) carries its `doc_ids`, `rag_config`, `provider`, `model` — client only sends the query.

@@ -116,4 +116,4 @@ async def test_done_sentinel_always_last():
         )
     )
 
-    assert results[-1] == {"__done__": True, "sources": []}
+    assert results[-1] == {"__done__": True, "sources": [], "context": []}
