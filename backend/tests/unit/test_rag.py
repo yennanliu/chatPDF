@@ -9,10 +9,10 @@ Contract under test:
 """
 from unittest.mock import MagicMock, patch
 
-from services.rag import run_rag_stream
 # Captured at import time, before the autouse ``_stub_relevance_scorer`` fixture
 # swaps out the module attribute — this is the real factory under test.
 from services.rag import _relevance_scorer as _real_relevance_scorer
+from services.rag import run_rag_stream
 from services.rag_config import RAGConfig
 
 
