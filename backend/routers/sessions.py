@@ -117,12 +117,15 @@ def create_session(body: SessionCreate, db: DBSession = Depends(get_db)):
             status_code=422,
             detail=f"Unknown provider '{body.provider}'. Choose one of: {', '.join(known_providers())}",
         )
-    if len(body.doc_ids) > settings.max_docs_per_session:
+    # Dedupe (preserving order): SessionDocument has a composite PK
+    # (session_id, document_id), so a repeated doc_id would IntegrityError on commit.
+    doc_ids = list(dict.fromkeys(body.doc_ids))
+    if len(doc_ids) > settings.max_docs_per_session:
         raise HTTPException(
             status_code=422,
             detail=f"Too many documents: limit is {settings.max_docs_per_session} per session.",
         )
-    for doc_id in body.doc_ids:
+    for doc_id in doc_ids:
         if not db.get(Document, doc_id):
             raise HTTPException(status_code=404, detail=f"Document not found: {doc_id}")
     session = SessionModel(
@@ -134,7 +137,7 @@ def create_session(body: SessionCreate, db: DBSession = Depends(get_db)):
     db.add(session)
     db.commit()
     db.refresh(session)
-    for doc_id in body.doc_ids:
+    for doc_id in doc_ids:
         db.add(SessionDocument(session_id=session.id, document_id=doc_id))
     db.commit()
     return _session_out(session, _session_docs(session.id, db))
