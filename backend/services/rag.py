@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import AsyncIterator, Union
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -13,17 +14,22 @@ from vector_store import VectorStore
 logger = logging.getLogger("chatpdf.rag")
 
 _relevance_scorer_singleton = None
+_relevance_scorer_lock = threading.Lock()
 
 
 def _relevance_scorer():
     """Shared cross-encoder used by the relevance gate (lazy, process-wide).
 
     Indirected through a factory so tests can stub it without loading the model.
+    Double-checked locking so concurrent requests can't each load the (heavy)
+    cross-encoder model.
     """
     global _relevance_scorer_singleton
     if _relevance_scorer_singleton is None:
-        from services.plugins.rerankers import CrossEncoderReranker
-        _relevance_scorer_singleton = CrossEncoderReranker()
+        with _relevance_scorer_lock:
+            if _relevance_scorer_singleton is None:
+                from services.plugins.rerankers import CrossEncoderReranker
+                _relevance_scorer_singleton = CrossEncoderReranker()
     return _relevance_scorer_singleton
 
 

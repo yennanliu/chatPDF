@@ -5,7 +5,13 @@ must be robust to the usual LLM output noise (code fences, stray prose).
 """
 from __future__ import annotations
 
-from services.judge import judge_context, judge_correctness, judge_response, parse_judge_response
+from services.judge import (
+    judge_answer,
+    judge_context,
+    judge_correctness,
+    judge_response,
+    parse_judge_response,
+)
 from tests.conftest import _FakeChatModel
 
 
@@ -82,3 +88,33 @@ def test_judge_correctness_none_without_reference():
     # No reference → not scorable, no LLM call needed.
     assert judge_correctness("q?", "the answer", None, _FakeChatModel(response="x")) is None
     assert judge_correctness("q?", "the answer", "  ", _FakeChatModel(response="x")) is None
+
+
+# ── brace escaping: document/answer text must not break str.format ──────────────
+
+# PDF chunks routinely carry literal braces (code, JSON, LaTeX); these must not
+# raise KeyError out of the prompt .format() and silently void every score.
+_BRACEY = 'see {config: {"k": 1}} and \\frac{a}{b}'
+
+
+def test_judge_answer_survives_braces_in_inputs():
+    llm = _FakeChatModel(response='{"faithfulness": 0.9, "answer_relevance": 0.8}')
+    out = judge_answer(_BRACEY, [_BRACEY], _BRACEY, llm)
+    assert out == {"faithfulness": 0.9, "answer_relevance": 0.8}
+
+
+def test_judge_context_survives_braces_in_inputs():
+    llm = _FakeChatModel(response='{"context_precision": 0.7, "context_recall": 0.6}')
+    out = judge_context(_BRACEY, [_BRACEY], _BRACEY, llm)
+    assert out == {"context_precision": 0.7, "context_recall": 0.6}
+
+
+def test_judge_response_survives_braces_in_inputs():
+    llm = _FakeChatModel(response='{"faithfulness": 0.9, "answer_relevance": 0.8, "context_precision": 0.7}')
+    out = judge_response(_BRACEY, [_BRACEY], _BRACEY, llm)
+    assert out == {"faithfulness": 0.9, "answer_relevance": 0.8, "context_precision": 0.7}
+
+
+def test_judge_correctness_survives_braces_in_inputs():
+    llm = _FakeChatModel(response='{"answer_correctness": 0.85}')
+    assert judge_correctness(_BRACEY, _BRACEY, _BRACEY, llm) == 0.85

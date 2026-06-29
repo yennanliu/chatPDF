@@ -97,6 +97,16 @@ ANSWER:
 """
 
 
+def _esc(text: str | None) -> str:
+    """Escape literal braces so document/answer text can't break ``str.format``.
+
+    PDF chunks routinely contain ``{`` / ``}`` (code, JSON, LaTeX), which would
+    otherwise raise ``KeyError`` and silently void the judge's scores."""
+    if not text:
+        return ""
+    return text.replace("{", "{{").replace("}", "}}")
+
+
 def _clamp(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
@@ -139,7 +149,7 @@ def judge_answer(
     carries the LangChain run config (e.g. Langfuse callbacks) when tracing is on.
     """
     context = "\n\n".join(context_texts) or "No context retrieved."
-    prompt = _JUDGE_PROMPT.format(question=question, context=context, answer=answer)
+    prompt = _JUDGE_PROMPT.format(question=_esc(question), context=_esc(context), answer=_esc(answer))
     try:
         resp = llm.invoke([HumanMessage(content=prompt)], config=config)
     except Exception as exc:
@@ -172,8 +182,8 @@ def judge_context(
             ref_clause=" and the REFERENCE ANSWER",
             recall_line=_RECALL_LINE,
             schema='{{"context_precision": <float>, "context_recall": <float>}}',
-            question=question, context=context,
-            ref_block=f"\nREFERENCE ANSWER:\n{reference_answer}\n",
+            question=_esc(question), context=_esc(context),
+            ref_block=f"\nREFERENCE ANSWER:\n{_esc(reference_answer)}\n",
         )
     else:
         required = ("context_precision",)
@@ -181,7 +191,7 @@ def judge_context(
             ref_clause="",
             recall_line="",
             schema='{{"context_precision": <float>}}',
-            question=question, context=context, ref_block="",
+            question=_esc(question), context=_esc(context), ref_block="",
         )
     try:
         resp = llm.invoke([HumanMessage(content=prompt)], config=config)
@@ -208,7 +218,7 @@ def judge_response(
     for the chat hot path): faithfulness, answer_relevance, context_precision.
     Returns the parsed scores, or None if the call fails / can't be parsed."""
     context = "\n\n".join(context_texts) or "No context retrieved."
-    prompt = _RESPONSE_PROMPT.format(question=question, context=context, answer=answer)
+    prompt = _RESPONSE_PROMPT.format(question=_esc(question), context=_esc(context), answer=_esc(answer))
     try:
         resp = llm.invoke([HumanMessage(content=prompt)], config=config)
     except Exception as exc:
@@ -229,7 +239,7 @@ def judge_correctness(
     or the call fails / can't be parsed."""
     if not (reference_answer and reference_answer.strip()):
         return None
-    prompt = _CORRECTNESS_PROMPT.format(question=question, reference=reference_answer, answer=answer)
+    prompt = _CORRECTNESS_PROMPT.format(question=_esc(question), reference=_esc(reference_answer), answer=_esc(answer))
     try:
         resp = llm.invoke([HumanMessage(content=prompt)], config=config)
     except Exception as exc:

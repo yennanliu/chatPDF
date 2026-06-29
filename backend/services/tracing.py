@@ -16,6 +16,7 @@ break a chat turn or an eval run.
 from __future__ import annotations
 
 import logging
+import threading
 
 from config import settings
 
@@ -27,6 +28,7 @@ logger = logging.getLogger("chatpdf.tracing")
 # client init.
 _client_instance = None
 _init_attempted = False
+_client_lock = threading.Lock()
 
 
 def _reset_for_tests() -> None:
@@ -47,19 +49,22 @@ def _client():
         return None
     if _init_attempted:
         return _client_instance
-    _init_attempted = True
-    try:
-        from langfuse import Langfuse
+    with _client_lock:
+        if _init_attempted:
+            return _client_instance
+        _init_attempted = True
+        try:
+            from langfuse import Langfuse
 
-        _client_instance = Langfuse(
-            public_key=settings.langfuse_public_key,
-            secret_key=settings.langfuse_secret_key,
-            host=settings.langfuse_host,
-        )
-        logger.info("Langfuse tracing enabled (host=%s)", settings.langfuse_host)
-    except Exception:
-        logger.warning("Langfuse configured but failed to initialise; tracing disabled", exc_info=True)
-        _client_instance = None
+            _client_instance = Langfuse(
+                public_key=settings.langfuse_public_key,
+                secret_key=settings.langfuse_secret_key,
+                host=settings.langfuse_host,
+            )
+            logger.info("Langfuse tracing enabled (host=%s)", settings.langfuse_host)
+        except Exception:
+            logger.warning("Langfuse configured but failed to initialise; tracing disabled", exc_info=True)
+            _client_instance = None
     return _client_instance
 
 
