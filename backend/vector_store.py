@@ -96,6 +96,15 @@ def _resolve_embedding_fn() -> Optional[EmbeddingFunction]:
     live in one space — switching backends requires re-ingesting documents.
     """
     if settings.embedding_backend == "openai":
+        if not settings.openai_api_key:
+            # Without a key the OpenAI embedder raises a cryptic credentials error
+            # on every ingest/query. Fall back to the local model so the app stays
+            # usable, and say so loudly.
+            logger.warning(
+                "EMBEDDING_BACKEND=openai but OPENAI_API_KEY is empty — "
+                "falling back to local embeddings."
+            )
+            return None
         from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
         logger.info("vector store using OpenAI embeddings")
         return OpenAIEmbeddingFunction(

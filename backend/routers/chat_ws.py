@@ -28,12 +28,17 @@ def _friendly_error(exc: Exception) -> str:
     leak provider internals (URLs, request IDs), so it is logged server-side only.
     """
     msg = str(exc)
-    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+    low = msg.lower()
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in low:
         retry_match = re.search(r"retry[^\d]*(\d+(?:\.\d+)?)s", msg, re.IGNORECASE)
         retry_hint = f" Please retry in ~{int(float(retry_match.group(1)))}s." if retry_match else ""
         return f"API quota exceeded for this model.{retry_hint}"
-    if "401" in msg or "API key" in msg.lower() or "authentication" in msg.lower():
-        return "Invalid or missing API key for this provider."
+    if (
+        "401" in msg or "403" in msg or "unauthorized" in low
+        or "api key" in low or "api_key" in low
+        or "credentials" in low or "authentication" in low
+    ):
+        return "Missing or invalid API key for this provider — check the server's API keys."
     return "The model failed to respond. Please try again."
 
 
