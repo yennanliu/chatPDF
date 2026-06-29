@@ -50,3 +50,9 @@ app.add_middleware(
 app.include_router(documents.router)
 app.include_router(sessions.router)
 app.include_router(chat_ws.router)
+
+
+@app.get("/health", tags=["health"])
+def health() -> dict[str, str]:
+    """Liveness probe for container orchestration (docker-compose healthcheck)."""
+    return {"status": "ok"}
