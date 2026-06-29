@@ -95,6 +95,66 @@ def _retrieve(retriever, query: str, cfg: RAGConfig, doc_ids: list[str], llm: Ba
     return ranked[: cfg.top_k]
 
 
+def retrieve_context(
+    query: str,
+    doc_ids: list[str],
+    rag_config: RAGConfig,
+    vs: VectorStore,
+    llm: BaseChatModel | None = None,
+) -> list[dict]:
+    """Run the full retrieval path — retriever (optionally multi-query widened),
+    grade filter, then reranker — and return the final context chunks.
+
+    Shared by ``run_rag_stream`` and the evaluation runner so both measure the
+    *same* pipeline. ``llm`` is only needed when ``multi_query`` is on; pass None
+    to evaluate retrieval without an LLM available.
+    """
+    retriever = build_retriever(rag_config, vs)
+
+    # 1. Retrieve (widen with paraphrases only when multi_query is on and we have an LLM)
+    if rag_config.multi_query > 0 and llm is not None:
+        context = _retrieve(retriever, query, rag_config, doc_ids, llm)
+    else:
+        context = retriever.search(query, rag_config.top_k, doc_ids)
+
+    # 2. Grade filter — drop weakly-relevant chunks before they reach the prompt
+    if rag_config.min_score > 0:
+        context = [c for c in context if c.get("score", 0.0) >= rag_config.min_score]
+
+    # 3. Rerank if configured
+    if rag_config.reranker != "none" and context:
+        context = build_reranker(rag_config).rerank(query, context)[: rag_config.rerank_top_n]
+
+    return context
+
+
+def build_rag_messages(
+    query: str, context: list[dict], history: list[BaseMessage], rag_config: RAGConfig
+) -> list[BaseMessage]:
+    """Resolve the system template, trim context + history to the token budget,
+    and assemble the final prompt messages. Shared by streaming and eval."""
+    system_template = rag_config.system_prompt or _SYSTEM
+    if "{context}" not in system_template:
+        system_template = system_template + "\n\nContext:\n{context}"
+    prompt_ctx, prompt_hist = _fit_to_budget(
+        query, context, history, system_template, rag_config.max_context_tokens
+    )
+    return _build_messages(query, prompt_ctx, prompt_hist, system_template)
+
+
+def sources_from_context(context: list[dict], limit: int = 3) -> list[dict]:
+    """Shape retrieved chunks into the citation payload returned to clients."""
+    return [
+        {
+            "doc_name": c["metadata"].get("file", ""),
+            "page": c["metadata"].get("page"),
+            "chunk_preview": c["text"][:200],
+            "score": round(c.get("score", 0.0), 3),
+        }
+        for c in context[:limit]
+    ]
+
+
 async def run_rag_stream(
     query: str,
     doc_ids: list[str],
@@ -103,39 +163,16 @@ async def run_rag_stream(
     vs: VectorStore,
     llm: BaseChatModel,
 ) -> AsyncIterator[Union[str, dict]]:
-    # 1. Retrieve via retriever plugin (optionally widened with query paraphrases)
-    retriever = build_retriever(rag_config, vs)
-    context = _retrieve(retriever, query, rag_config, doc_ids, llm)
+    # 1. Retrieve + grade + rerank
+    context = retrieve_context(query, doc_ids, rag_config, vs, llm)
 
-    # 1b. Grade filter — drop weakly-relevant chunks before they reach the prompt
-    if rag_config.min_score > 0:
-        context = [c for c in context if c.get("score", 0.0) >= rag_config.min_score]
+    # 2. Build prompt (custom system prompt allowed; trimmed to the token budget)
+    messages = build_rag_messages(query, context, history, rag_config)
 
-    # 2. Rerank if configured
-    if rag_config.reranker != "none" and context:
-        context = build_reranker(rag_config).rerank(query, context)[: rag_config.rerank_top_n]
-
-    # 3. Build prompt — custom system prompt allowed; trim to the token budget
-    system_template = rag_config.system_prompt or _SYSTEM
-    if "{context}" not in system_template:
-        system_template = system_template + "\n\nContext:\n{context}"
-    prompt_ctx, prompt_hist = _fit_to_budget(
-        query, context, history, system_template, rag_config.max_context_tokens
-    )
-
-    # 4. Stream tokens from LLM
-    async for chunk in llm.astream(_build_messages(query, prompt_ctx, prompt_hist, system_template)):
+    # 3. Stream tokens from LLM
+    async for chunk in llm.astream(messages):
         if chunk.content:
             yield str(chunk.content)
 
-    # 5. Emit done sentinel with source citations
-    sources = [
-        {
-            "doc_name": c["metadata"].get("file", ""),
-            "page": c["metadata"].get("page"),
-            "chunk_preview": c["text"][:200],
-            "score": round(c.get("score", 0.0), 3),
-        }
-        for c in context[:3]
-    ]
-    yield {"__done__": True, "sources": sources}
+    # 4. Emit done sentinel with source citations
+    yield {"__done__": True, "sources": sources_from_context(context)}

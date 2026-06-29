@@ -13,7 +13,6 @@ from services.plugins.sparse import BM25, tokenize
 from services.rag import _expand_queries, _retrieve
 from services.rag_config import RAGConfig
 
-
 # ── §5.1 page-aware ingestion ──────────────────────────────────────────────────
 
 def test_ingestion_attaches_page_numbers(db_session, test_vs, tmp_path):

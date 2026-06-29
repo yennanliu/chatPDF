@@ -64,17 +64,27 @@ export const api = {
     return (await request(path)).json() as Promise<T>
   },
 
-  async postJson<T>(path: string, body: unknown): Promise<T> {
+  async postJson<T>(path: string, body: unknown, timeoutMs?: number): Promise<T> {
     const res = await request(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      ...(timeoutMs ? { timeoutMs } : {}),
     })
     return res.json() as Promise<T>
   },
 
   async postForm<T>(path: string, form: FormData): Promise<T> {
     const res = await request(path, { method: 'POST', body: form, timeoutMs: 120_000 })
+    return res.json() as Promise<T>
+  },
+
+  async putJson<T>(path: string, body: unknown): Promise<T> {
+    const res = await request(path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
     return res.json() as Promise<T>
   },
 

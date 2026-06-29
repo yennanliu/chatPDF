@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     chroma_data_dir: str = "../chroma_data"
     upload_dir: str = "../uploads"
     sqlite_url: str = "sqlite:///../chatpdf.db"
+    eval_gold_path: str = "../eval/gold.json"  # persisted RAG-eval gold set
 
     # Comma-separated allowed CORS origins
     cors_origins: str = "http://localhost:5173"

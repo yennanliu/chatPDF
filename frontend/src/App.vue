@@ -22,18 +22,18 @@ function closeNav() { navOpen.value = false }
     <div class="mobile-bar">
       <button class="hamburger" :aria-expanded="navOpen" @click="navOpen = !navOpen">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <line v-if="!navOpen" x1="3" y1="6"  x2="21" y2="6"  />
+          <line v-if="!navOpen" x1="3" y1="6" x2="21" y2="6" />
           <line v-if="!navOpen" x1="3" y1="12" x2="21" y2="12" />
           <line v-if="!navOpen" x1="3" y1="18" x2="21" y2="18" />
-          <line v-if="navOpen"  x1="18" y1="6"  x2="6" y2="18" />
-          <line v-if="navOpen"  x1="6"  y1="6" x2="18" y2="18" />
+          <line v-if="navOpen" x1="18" y1="6" x2="6" y2="18" />
+          <line v-if="navOpen" x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
       <div class="mobile-brand">
         <div class="brand-mark-sm">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
           </svg>
         </div>
         <span class="mobile-title">ChatPDF</span>
@@ -48,11 +48,11 @@ function closeNav() { navOpen.value = false }
       <div class="sidebar-brand">
         <div class="brand-mark">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
           </svg>
         </div>
         <span class="brand-text">ChatPDF</span>
@@ -66,8 +66,8 @@ function closeNav() { navOpen.value = false }
         >
           <span class="nav-icon nav-icon-orange">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
             </svg>
           </span>
           Documents
@@ -80,29 +80,44 @@ function closeNav() { navOpen.value = false }
         >
           <span class="nav-icon nav-icon-purple">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </span>
           Chat
+        </RouterLink>
+
+        <RouterLink
+          to="/eval"
+          :class="['nav-item', 'nav-eval', route.path.startsWith('/eval') ? 'active' : '']"
+          @click="closeNav"
+        >
+          <span class="nav-icon nav-icon-blue">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+          </span>
+          Evaluation
         </RouterLink>
       </nav>
 
       <div class="sidebar-footer">
         <a :href="docsUrl" target="_blank" class="sidebar-link">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           API Docs
         </a>
         <button class="sidebar-link theme-toggle" :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleTheme">
           <svg v-if="theme === 'dark'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5"/>
-            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            <circle cx="12" cy="12" r="5" />
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
           </svg>
           <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
           </svg>
           {{ theme === 'dark' ? 'Light mode' : 'Dark mode' }}
         </button>
@@ -168,6 +183,7 @@ function closeNav() { navOpen.value = false }
 .nav-docs.active  { background: rgba(242,78,30,.08);  color: var(--brand-orange); }
 .nav-libs.active  { background: rgba(10,207,131,.08); color: #089e62; }
 .nav-chat.active  { background: rgba(162,89,255,.1);  color: var(--brand-purple); }
+.nav-eval.active  { background: rgba(26,188,254,.1);  color: #0b7fb0; }
 
 /* Nav icon pill */
 .nav-icon {
@@ -179,6 +195,7 @@ function closeNav() { navOpen.value = false }
 .nav-icon-orange { background: rgba(242,78,30,.1);   color: var(--brand-orange); }
 .nav-icon-green  { background: rgba(10,207,131,.1);  color: var(--brand-green); }
 .nav-icon-purple { background: rgba(162,89,255,.1);  color: var(--brand-purple); }
+.nav-icon-blue   { background: rgba(26,188,254,.1);  color: var(--brand-blue); }
 
 /* ── Sidebar footer ──────────────────────────────────────────────────────────── */
 .sidebar-footer {

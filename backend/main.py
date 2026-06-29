@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from db import init_db
-from routers import chat_ws, documents, models, sessions
+from routers import chat_ws, documents, eval, models, sessions
 
 # App-wide logging. basicConfig wires our module loggers to stdout alongside
 # uvicorn's; force=True so it still applies under uvicorn's own log setup.
@@ -55,6 +55,7 @@ app.include_router(documents.router)
 app.include_router(sessions.router)
 app.include_router(chat_ws.router)
 app.include_router(models.router)
+app.include_router(eval.router)
 
 
 @app.get("/health", tags=["health"])
