@@ -7,10 +7,19 @@ must never regress (the app must run identically with tracing off).
 """
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 
 import config
 from services import tracing
+
+
+def _fake_langfuse_module(monkeypatch, cls):
+    mod = types.ModuleType("langfuse")
+    mod.Langfuse = cls
+    monkeypatch.setitem(sys.modules, "langfuse", mod)
 
 
 @pytest.fixture(autouse=True)
@@ -48,3 +57,40 @@ def test_eval_variant_trace_propagates_caller_exceptions():
     with pytest.raises(ValueError):
         with tracing.eval_variant_trace("dense", k=5, n_questions=1):
             raise ValueError("boom")
+
+
+# ── enabled-path client init (only exercisable with stubbed credentials) ──────
+
+def _enable_keys(monkeypatch):
+    monkeypatch.setattr(config.settings, "langfuse_public_key", "pk-test")
+    monkeypatch.setattr(config.settings, "langfuse_secret_key", "sk-test")
+    tracing._reset_for_tests()
+
+
+def test_client_initialises_once_when_configured(monkeypatch):
+    constructed = []
+
+    class FakeLangfuse:
+        def __init__(self, **kwargs):
+            constructed.append(kwargs)
+
+    _fake_langfuse_module(monkeypatch, FakeLangfuse)
+    _enable_keys(monkeypatch)
+
+    assert tracing.is_enabled() is True
+    # Memoised: a second call must not construct another client.
+    assert tracing.is_enabled() is True
+    assert len(constructed) == 1
+    assert constructed[0]["public_key"] == "pk-test"
+
+
+def test_client_init_failure_disables_tracing(monkeypatch):
+    class BoomLangfuse:
+        def __init__(self, **kwargs):
+            raise RuntimeError("bad credentials")
+
+    _fake_langfuse_module(monkeypatch, BoomLangfuse)
+    _enable_keys(monkeypatch)
+
+    # A construction failure is swallowed: tracing stays off, app unaffected.
+    assert tracing.is_enabled() is False

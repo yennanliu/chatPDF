@@ -6,6 +6,7 @@ must be robust to the usual LLM output noise (code fences, stray prose).
 from __future__ import annotations
 
 from services.judge import (
+    _esc,
     judge_answer,
     judge_context,
     judge_correctness,
@@ -95,6 +96,12 @@ def test_judge_correctness_none_without_reference():
 # PDF chunks routinely carry literal braces (code, JSON, LaTeX); these must not
 # raise KeyError out of the prompt .format() and silently void every score.
 _BRACEY = 'see {config: {"k": 1}} and \\frac{a}{b}'
+
+
+def test_esc_doubles_braces_and_handles_empty():
+    assert _esc(None) == ""
+    assert _esc("") == ""
+    assert _esc('a {b} c') == 'a {{b}} c'
 
 
 def test_judge_answer_survives_braces_in_inputs():

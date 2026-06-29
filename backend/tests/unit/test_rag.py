@@ -10,6 +10,9 @@ Contract under test:
 from unittest.mock import MagicMock, patch
 
 from services.rag import run_rag_stream
+# Captured at import time, before the autouse ``_stub_relevance_scorer`` fixture
+# swaps out the module attribute — this is the real factory under test.
+from services.rag import _relevance_scorer as _real_relevance_scorer
 from services.rag_config import RAGConfig
 
 
@@ -18,6 +21,25 @@ async def _collect(gen) -> list:
     async for item in gen:
         items.append(item)
     return items
+
+
+# ── relevance-scorer lazy singleton (rag.py _relevance_scorer) ───────────────
+
+def test_relevance_scorer_lazily_constructs_and_caches(monkeypatch):
+    """First call builds the cross-encoder under the lock; subsequent calls
+    return the memoised instance without reconstructing it."""
+    import services.plugins.rerankers as rerankers
+    import services.rag as rag_mod
+
+    sentinel = object()
+    monkeypatch.setattr(rerankers, "CrossEncoderReranker", lambda: sentinel)
+    monkeypatch.setattr(rag_mod, "_relevance_scorer_singleton", None)
+
+    assert _real_relevance_scorer() is sentinel
+    # A second construction must not happen — swap in a different factory and
+    # confirm the cached sentinel is still returned.
+    monkeypatch.setattr(rerankers, "CrossEncoderReranker", lambda: object())
+    assert _real_relevance_scorer() is sentinel
 
 
 # ── reranker path (rag.py lines 63-64) ───────────────────────────────────────
