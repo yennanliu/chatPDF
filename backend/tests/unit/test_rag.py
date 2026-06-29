@@ -9,6 +9,9 @@ Contract under test:
 """
 from unittest.mock import MagicMock, patch
 
+# Captured at import time, before the autouse ``_stub_relevance_scorer`` fixture
+# swaps out the module attribute — this is the real factory under test.
+from services.rag import _relevance_scorer as _real_relevance_scorer
 from services.rag import run_rag_stream
 from services.rag_config import RAGConfig
 
@@ -18,6 +21,25 @@ async def _collect(gen) -> list:
     async for item in gen:
         items.append(item)
     return items
+
+
+# ── relevance-scorer lazy singleton (rag.py _relevance_scorer) ───────────────
+
+def test_relevance_scorer_lazily_constructs_and_caches(monkeypatch):
+    """First call builds the cross-encoder under the lock; subsequent calls
+    return the memoised instance without reconstructing it."""
+    import services.plugins.rerankers as rerankers
+    import services.rag as rag_mod
+
+    sentinel = object()
+    monkeypatch.setattr(rerankers, "CrossEncoderReranker", lambda: sentinel)
+    monkeypatch.setattr(rag_mod, "_relevance_scorer_singleton", None)
+
+    assert _real_relevance_scorer() is sentinel
+    # A second construction must not happen — swap in a different factory and
+    # confirm the cached sentinel is still returned.
+    monkeypatch.setattr(rerankers, "CrossEncoderReranker", lambda: object())
+    assert _real_relevance_scorer() is sentinel
 
 
 # ── reranker path (rag.py lines 63-64) ───────────────────────────────────────
@@ -41,7 +63,8 @@ async def test_reranker_applied_when_configured():
         {"text": "reranked chunk", "metadata": {"file": "doc.pdf"}, "score": 0.95}
     ]
 
-    cfg = RAGConfig(reranker="cross_encoder", rerank_top_n=1)
+    # Disable the relevance gate to isolate the reranker wiring under test.
+    cfg = RAGConfig(reranker="cross_encoder", rerank_top_n=1, relevance_gate=None)
 
     with patch("services.rag.build_reranker", return_value=fake_reranker):
         results = await _collect(
@@ -115,4 +138,4 @@ async def test_done_sentinel_always_last():
         )
     )
 
-    assert results[-1] == {"__done__": True, "sources": []}
+    assert results[-1] == {"__done__": True, "sources": [], "context": []}

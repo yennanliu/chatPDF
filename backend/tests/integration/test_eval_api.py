@@ -51,8 +51,47 @@ async def test_gold_put_then_get_roundtrips(client, gold_path):
 
 async def test_presets_listed(client):
     r = await client.get("/api/eval/presets")
-    labels = [p["label"] for p in r.json()["presets"]]
-    assert "dense / k5" in labels
+    presets = r.json()["presets"]
+    labels = [p["label"] for p in presets]
+    assert "dense + gate" in labels
+    # The no-gate variant explicitly disables the relevance gate for comparison.
+    no_gate = next(p for p in presets if p["label"] == "dense (no gate)")
+    assert no_gate["overrides"]["relevance_gate"] is None
+
+
+async def test_tracing_status_disabled_by_default(client, monkeypatch):
+    monkeypatch.setattr(config.settings, "langfuse_public_key", "")
+    monkeypatch.setattr(config.settings, "langfuse_secret_key", "")
+    r = await client.get("/api/eval/tracing")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enabled"] is False
+    assert body["host"] is None
+
+
+# ── run history ───────────────────────────────────────────────────────────────
+
+async def test_history_empty_by_default(client):
+    r = await client.get("/api/eval/history")
+    assert r.status_code == 200
+    assert r.json() == {"runs": []}
+
+
+async def test_run_is_persisted_to_history(client, test_vs, gold_path):
+    _seed(test_vs, "dh", ["the ingest worker uses exponential backoff"])
+    await client.put("/api/eval/gold", json={"items": [{
+        "question": "retry policy?", "doc_ids": ["dh"],
+        "relevant_substrings": ["exponential backoff"],
+    }]})
+    await client.post("/api/eval/run", json={
+        "configs": [{"label": "dense", "overrides": {"retriever": "dense"}}],
+        "k": 5,
+    })
+    r = await client.get("/api/eval/history")
+    runs = r.json()["runs"]
+    assert len(runs) == 1
+    assert runs[0]["summary"][0]["label"] == "dense"
+    assert runs[0]["summary"][0]["metrics"]["hit@k"] == 1.0
 
 
 # ── run: retrieval only ───────────────────────────────────────────────────────
@@ -117,7 +156,13 @@ async def test_judge_disabled_without_key(client, test_vs, gold_path, monkeypatc
 
 class _JsonGateway(LLMGateway):
     def get_llm(self, provider, model, temperature=0.0):
-        return _FakeChatModel(response='{"faithfulness": 0.9, "answer_relevance": 0.8}')
+        # One canned blob serving both judges — each parser extracts only its own
+        # keys (judge_answer: faithfulness/answer_relevance; judge_context: the
+        # context_* pair), ignoring the extras.
+        return _FakeChatModel(response=(
+            '{"faithfulness": 0.9, "answer_relevance": 0.8, '
+            '"context_precision": 0.7, "context_recall": 0.6, "answer_correctness": 0.95}'
+        ))
 
 
 class _GarbageJudgeGateway(LLMGateway):
@@ -135,6 +180,7 @@ async def test_run_with_judge_scores_generation(client, test_vs, gold_path, monk
     await client.put("/api/eval/gold", json={"items": [{
         "question": "retry policy?", "doc_ids": ["d4"],
         "relevant_substrings": ["exponential backoff"],
+        "reference_answer": "The ingest worker retries with exponential backoff.",
     }]})
     r = await client.post("/api/eval/run", json={
         "configs": [{"label": "dense", "overrides": {}}],
@@ -145,7 +191,13 @@ async def test_run_with_judge_scores_generation(client, test_vs, gold_path, monk
     res = body["results"][0]
     assert res["metrics"]["faithfulness"] == 0.9
     assert res["metrics"]["answer_relevance"] == 0.8
+    # Label-free retrieval-quality metrics scored by the context judge.
+    assert res["metrics"]["context_precision"] == 0.7
+    assert res["metrics"]["context_recall"] == 0.6
+    # Answer correctness vs. the gold reference answer.
+    assert res["metrics"]["answer_correctness"] == 0.95
     assert res["per_question"][0]["answer"] is not None
+    assert res["per_question"][0]["context_precision"] == 0.7
 
 
 async def test_run_warns_when_judge_yields_no_scores(client, test_vs, gold_path, monkeypatch):

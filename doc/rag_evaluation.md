@@ -58,6 +58,34 @@ no API calls, fast, fully reproducible. **This is where to spend first.**
 
 ---
 
+### Per-response scoring on live chat (no gold needed)
+
+Every chat answer is scored *after* it finishes streaming (non-blocking — the
+answer shows immediately, scores arrive a beat later as a `metrics` WS frame and
+are persisted on the message). Because a live turn has **no ground truth**, only
+label-free metrics are shown — `services/response_metrics.py` runs one combined
+judge call for **faithfulness**, **answer relevance**, and **context precision**,
+plus a **retrieval confidence** from the cross-encoder relevance scores, blended
+into a single **confidence** = mean of the available components. The
+gold-dependent IR metrics (Hit/Recall/Precision/MRR) and **answer correctness**
+are *not* computable per live turn — they live on the Evaluation page, where a
+gold set (and reference answers) exist. Toggle with `CHAT_RESPONSE_SCORING`.
+
+### Context precision & recall (label-free, LLM-judged)
+
+Beyond the substring metrics (which need hand-authored `relevant_substrings`),
+the judge can score *retrieval* quality directly (`judge.py::judge_context`):
+
+* **context precision** — what fraction of the retrieved context is actually
+  relevant to the question (signal vs. noise). This is the metric the **relevance
+  gate** should move: gating out irrelevant chunks raises precision. Scored from
+  the question alone, so no labels needed.
+* **context recall** — how fully the retrieved context covers the
+  `reference_answer` (needs that field on the gold item; otherwise reported as —).
+
+Both are opt-in with the LLM-judge toggle and appear as `Ctx prec` / `Ctx rec`
+columns. The `dense (no gate)` vs `dense + gate` presets isolate the gate's effect.
+
 ## 3. Generation / answer metrics (needs an LLM judge)
 
 Given retrieval is good, grade the generated answer. The standard RAG-triad
@@ -181,9 +209,11 @@ Measurement first, because it makes everything else decidable.
 1. **Eval harness + gold set (§4–5)** — unblocks every tuning decision; do this first.
 2. **Cross-encoder reranking as a default** for quality-sensitive sessions/collections —
    already implemented (`rerankers.py`), just not on by default; biggest precision win.
-3. **Relevance / score floor** — the design's skipped "grade" step
-   (`system_design.md` §9); drop chunks below a similarity threshold to cut noise
-   and hallucination. Cheap.
+3. ~~**Relevance / score floor**~~ — **done**: a cross-encoder **relevance gate**
+   (`rag.py::apply_relevance_gate`, `RAGConfig.relevance_gate`, **on by default**)
+   re-scores each retrieved chunk and drops those below the relevance boundary,
+   cutting noise/hallucination. Measure its effect with context precision (§2)
+   and the `dense (no gate)` vs `dense + gate` presets.
 4. **Query transformation** — conversational rewriting (fold chat history into a
    standalone retrieval query), multi-query expansion, or HyDE. Helps follow-ups,
    which currently retrieve on the raw turn only.
@@ -199,3 +229,46 @@ Measurement first, because it makes everything else decidable.
    failed retrievals, higher ingest cost.
 
 See [`rag_enhancements.md`](rag_enhancements.md) for the full proposal detail.
+
+---
+
+## 8. Observability & trends (Langfuse + in-app charts)
+
+The eval harness gives a point-in-time snapshot; observability tells you what's
+happening on *every* call and how quality moves *over time*.
+
+### In-app (always on, no setup)
+
+* **Metric comparison chart** — the Results table also renders as a grouped bar
+  chart (`GroupedBarChart.vue`), one bar per config across each [0,1] metric.
+* **Quality trends** — every run is persisted (`eval_run` table,
+  `services/eval_history.py`) and charted across runs (`TrendChart.vue`), one
+  line per config. Pick the metric; appears once there are ≥2 runs.
+* Both are dependency-free SVG — no chart library, nothing to keep updated.
+
+### Per-call tracing (Langfuse, optional & free)
+
+We integrate **[Langfuse](https://langfuse.com)** rather than LangSmith: it's
+open-source (self-hostable for free) *and* has a free cloud tier (Hobby, 50k
+events/mo, no card), with a native LangChain `CallbackHandler`.
+
+Setup — paste two keys into `backend/.env`:
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com   # or us. / self-host
+```
+
+With keys set, `services/tracing.py` attaches a callback to **every** LLM call —
+chat generation, eval answer, judge, and query expansion — so each is traced
+with latency / token usage / cost. Each eval variant becomes one trace, and its
+aggregate metrics (`eval/hit@k`, `eval/ndcg@k`, `eval/faithfulness`, …) are
+pushed as **Langfuse scores** for long-horizon trend dashboards in the Langfuse
+UI. The Evaluation page shows a banner indicating whether tracing is live.
+
+**Design notes.** Tracing is *fully opt-in*: with no keys, every function in
+`tracing.py` is a no-op — no SDK init, no network, no new failure modes — so
+dev / tests / CI are unaffected. All Langfuse calls are wrapped in try/except: a
+tracing failure must never break a chat turn or an eval run. The client is
+initialised at most once per process and flushed on shutdown.

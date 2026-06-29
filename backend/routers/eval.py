@@ -17,9 +17,11 @@ import logging
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlmodel import Session as DBSession
 
 from config import settings
-from services import gold_store
+from db import get_db
+from services import eval_history, gold_store, tracing
 from services.eval_runner import run_eval
 from services.llm_gateway import LLMGateway, get_llm_gateway
 from services.model_catalog import MODEL_CATALOG
@@ -31,7 +33,10 @@ logger = logging.getLogger("chatpdf.eval")
 
 # Curated config variants mirroring the comparison table in doc/rag_evaluation.md §5.
 _PRESETS = [
-    {"label": "dense / k5", "overrides": {"retriever": "dense", "top_k": 5}},
+    # First pair isolates the relevance gate's effect (everything else equal) —
+    # compare context_precision between them to see the noise the gate removes.
+    {"label": "dense (no gate)", "overrides": {"retriever": "dense", "top_k": 5, "relevance_gate": None}},
+    {"label": "dense + gate", "overrides": {"retriever": "dense", "top_k": 5}},  # gate on (default)
     {"label": "hybrid α0.5", "overrides": {"retriever": "hybrid", "hybrid_alpha": 0.5, "top_k": 5}},
     {"label": "hybrid α0.3", "overrides": {"retriever": "hybrid", "hybrid_alpha": 0.3, "top_k": 5}},
     {
@@ -130,11 +135,24 @@ def get_presets() -> dict:
     return {"presets": _PRESETS}
 
 
+@router.get("/tracing")
+def get_tracing() -> dict:
+    """Whether Langfuse tracing is configured — drives the UI status banner."""
+    return tracing.status()
+
+
+@router.get("/history")
+def get_history(db: DBSession = Depends(get_db)) -> dict:
+    """Past runs (aggregate metrics only) for the trend charts."""
+    return {"runs": eval_history.load_history(db)}
+
+
 @router.post("/run")
 def run(
     body: EvalRunRequest,
     vs: VectorStore = Depends(get_vector_store),
     gateway: LLMGateway = Depends(get_llm_gateway),
+    db: DBSession = Depends(get_db),
 ) -> dict:
     gold = gold_store.load_gold()
     variants = [(c.label, _build_config(c.overrides, body.k)) for c in body.configs]
@@ -163,5 +181,14 @@ def run(
     ):
         warnings.append("Judge produced no scores — check the judge provider's API key and model.")
 
+    # Persist the run so the trend charts have history (best-effort — a storage
+    # hiccup must not fail the response the user is waiting on).
+    if gold:
+        try:
+            eval_history.save_run(db, result)
+        except Exception:
+            logger.exception("failed to persist eval run to history")
+
     result["warnings"] = warnings
+    result["tracing_enabled"] = tracing.is_enabled()
     return result

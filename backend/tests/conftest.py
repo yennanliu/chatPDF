@@ -64,6 +64,37 @@ class FakeLLMGateway(LLMGateway):
         return _FakeChatModel()
 
 
+# ── Hermetic-tracing guard ────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def _disable_langfuse(monkeypatch):
+    """Keep tests offline: a developer's real LANGFUSE_* keys in .env would
+    otherwise make eval/chat runs send traces to Langfuse cloud. Force tracing
+    disabled and reset the memoised client around every test."""
+    monkeypatch.setattr(config.settings, "langfuse_public_key", "")
+    monkeypatch.setattr(config.settings, "langfuse_secret_key", "")
+    from services import tracing
+    tracing._reset_for_tests()
+    yield
+    tracing._reset_for_tests()
+
+
+# ── Relevance-gate stub ───────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def _stub_relevance_scorer(monkeypatch):
+    """The default RAGConfig enables the cross-encoder relevance gate. Stub the
+    scorer so tests never download/load the model: a high constant score keeps
+    every chunk (inert gate), preserving deterministic retrieval. Tests for the
+    gate itself inject their own scorer into ``apply_relevance_gate`` directly."""
+    class _PassThroughScorer:
+        def score(self, query, chunks):
+            return [10.0] * len(chunks)
+
+    import services.rag as rag_mod
+    monkeypatch.setattr(rag_mod, "_relevance_scorer", lambda: _PassThroughScorer())
+
+
 # ── DB fixtures ───────────────────────────────────────────────────────────────
 
 @pytest.fixture(name="db_engine")

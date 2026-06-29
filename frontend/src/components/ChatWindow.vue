@@ -30,6 +30,7 @@ watch(
           role:    m.role,
           content: m.content,
           sources: m.sources ?? null,
+          metrics: m.metrics ?? null,
         })),
       )
     } finally {

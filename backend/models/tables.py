@@ -45,6 +45,21 @@ class SessionDocument(SQLModel, table=True):
     added_at: datetime = Field(default_factory=_now)
 
 
+class EvalRun(SQLModel, table=True):
+    """A single RAG-evaluation run — stores the per-variant aggregate metrics so
+    the frontend can chart quality trends over time. The full per-question
+    drill-down is intentionally *not* persisted (it's large and only useful in
+    the moment); ``summary`` keeps just the headline metrics per config."""
+
+    __tablename__ = "eval_run"
+    id: str = Field(default_factory=_new_id, primary_key=True)
+    created_at: datetime = Field(default_factory=_now)
+    k: int
+    n_questions: int
+    judge_enabled: bool = False
+    summary: str = "[]"  # JSON: [{"label": str, "metrics": {...}}]
+
+
 class Message(SQLModel, table=True):
     id: str = Field(default_factory=_new_id, primary_key=True)
     # ON DELETE CASCADE: messages removed when owning session is deleted
@@ -54,4 +69,5 @@ class Message(SQLModel, table=True):
     role: str  # user | assistant
     content: str
     sources: Optional[str] = None  # JSON: [{doc_name, chunk_preview, score}]
+    metrics: Optional[str] = None  # JSON per-response quality scores (assistant only)
     created_at: datetime = Field(default_factory=_now)

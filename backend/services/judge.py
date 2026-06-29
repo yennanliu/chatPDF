@@ -44,17 +44,77 @@ ANSWER:
 
 _REQUIRED = ("faithfulness", "answer_relevance")
 
+_CONTEXT_PROMPT = """You are a strict, impartial grader of RAG *retrieval* quality. Judge only the CONTEXT passages against the QUESTION{ref_clause}. Score each axis from 0.0 to 1.0:
+
+- "context_precision": the fraction of the CONTEXT that is actually relevant to answering the QUESTION (signal vs. noise). 1.0 = every passage is on-topic and useful; 0.0 = all passages are irrelevant padding.
+{recall_line}
+Reply with a single JSON object and nothing else:
+{schema}
+
+QUESTION:
+{question}
+
+CONTEXT:
+{context}
+{ref_block}"""
+
+_RECALL_LINE = '- "context_recall": how fully the CONTEXT covers the information needed to support the REFERENCE ANSWER. 1.0 = every fact in the reference answer is grounded in the context; 0.0 = none are.\n'
+
+_RESPONSE_PROMPT = """You are a strict, impartial RAG grader. Score the ANSWER and the retrieved CONTEXT for the QUESTION on three axes, each from 0.0 to 1.0:
+
+- "faithfulness": the fraction of the answer's factual claims supported by the CONTEXT. 1.0 = every claim is grounded; 0.0 = the answer invents or contradicts facts.
+- "answer_relevance": how directly the answer addresses the QUESTION. 1.0 = fully on-topic and complete; 0.0 = evasive or off-topic.
+- "context_precision": the fraction of the CONTEXT passages that are relevant to the QUESTION. 1.0 = all useful; 0.0 = all noise.
+
+Judge ONLY against the provided context. Reply with a single JSON object and nothing else:
+{{"faithfulness": <float>, "answer_relevance": <float>, "context_precision": <float>}}
+
+QUESTION:
+{question}
+
+CONTEXT:
+{context}
+
+ANSWER:
+{answer}
+"""
+
+_RESPONSE_KEYS = ("faithfulness", "answer_relevance", "context_precision")
+
+_CORRECTNESS_PROMPT = """You are a strict grader of answer correctness. Compare the ANSWER to the REFERENCE ANSWER for the QUESTION. Score "answer_correctness" from 0.0 to 1.0: 1.0 = factually equivalent to / fully captures the reference; ~0.5 = partially correct or missing key facts; 0.0 = incorrect or contradicts the reference. Minor wording differences do not matter — judge the facts.
+
+Reply with a single JSON object and nothing else:
+{{"answer_correctness": <float>}}
+
+QUESTION:
+{question}
+
+REFERENCE ANSWER:
+{reference}
+
+ANSWER:
+{answer}
+"""
+
+
+def _esc(text: str | None) -> str:
+    """Escape literal braces so document/answer text can't break ``str.format``.
+
+    PDF chunks routinely contain ``{`` / ``}`` (code, JSON, LaTeX), which would
+    otherwise raise ``KeyError`` and silently void the judge's scores."""
+    if not text:
+        return ""
+    return text.replace("{", "{{").replace("}", "}}")
+
 
 def _clamp(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
 
-def parse_judge_response(text: str) -> dict | None:
-    """Extract {faithfulness, answer_relevance} from raw judge output.
-
-    Tolerates code fences and surrounding prose; clamps scores to [0, 1];
-    returns None when the JSON is absent, malformed, or missing an axis.
-    """
+def _parse_scores(text: str, required: tuple[str, ...]) -> dict | None:
+    """Extract a JSON object with the ``required`` numeric keys from raw LLM
+    output. Tolerates code fences / surrounding prose; clamps to [0, 1]; returns
+    None when the JSON is absent, malformed, or missing any required key."""
     if not text:
         return None
     match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -64,12 +124,17 @@ def parse_judge_response(text: str) -> dict | None:
         data = json.loads(match.group(0))
     except (ValueError, TypeError):
         return None
-    if not isinstance(data, dict) or any(k not in data for k in _REQUIRED):
+    if not isinstance(data, dict) or any(k not in data for k in required):
         return None
     try:
-        return {k: _clamp(data[k]) for k in _REQUIRED}
+        return {k: _clamp(data[k]) for k in required}
     except (TypeError, ValueError):
         return None
+
+
+def parse_judge_response(text: str) -> dict | None:
+    """Extract {faithfulness, answer_relevance} from raw judge output."""
+    return _parse_scores(text, _REQUIRED)
 
 
 def judge_answer(
@@ -77,14 +142,108 @@ def judge_answer(
     context_texts: list[str],
     answer: str,
     llm: BaseChatModel,
+    config: dict | None = None,
 ) -> dict | None:
     """Ask ``llm`` to grade ``answer`` against the context. Returns the parsed
-    scores, or None if the call fails or the output can't be parsed."""
+    scores, or None if the call fails or the output can't be parsed. ``config``
+    carries the LangChain run config (e.g. Langfuse callbacks) when tracing is on.
+    """
     context = "\n\n".join(context_texts) or "No context retrieved."
-    prompt = _JUDGE_PROMPT.format(question=question, context=context, answer=answer)
+    prompt = _JUDGE_PROMPT.format(question=_esc(question), context=_esc(context), answer=_esc(answer))
     try:
-        resp = llm.invoke([HumanMessage(content=prompt)])
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
     except Exception as exc:
         logger.warning("judge call failed: %s", exc)
         return None
     return parse_judge_response(str(resp.content))
+
+
+def judge_context(
+    question: str,
+    context_texts: list[str],
+    reference_answer: str | None,
+    llm: BaseChatModel,
+    config: dict | None = None,
+) -> dict | None:
+    """Grade *retrieval* quality, label-free (RAGAs-style context metrics):
+
+      * **context_precision** — how much of the retrieved context is relevant to
+        the question (always scored; measures noise the relevance gate should cut).
+      * **context_recall** — how fully the context covers the reference answer
+        (only when ``reference_answer`` is provided; else returned as None).
+
+    Returns ``{"context_precision": float, "context_recall": float | None}`` or
+    None if the call fails or the output can't be parsed."""
+    context = "\n\n".join(context_texts) or "No context retrieved."
+    has_ref = bool(reference_answer and reference_answer.strip())
+    if has_ref:
+        required = ("context_precision", "context_recall")
+        prompt = _CONTEXT_PROMPT.format(
+            ref_clause=" and the REFERENCE ANSWER",
+            recall_line=_RECALL_LINE,
+            schema='{{"context_precision": <float>, "context_recall": <float>}}',
+            question=_esc(question), context=_esc(context),
+            ref_block=f"\nREFERENCE ANSWER:\n{_esc(reference_answer)}\n",
+        )
+    else:
+        required = ("context_precision",)
+        prompt = _CONTEXT_PROMPT.format(
+            ref_clause="",
+            recall_line="",
+            schema='{{"context_precision": <float>}}',
+            question=_esc(question), context=_esc(context), ref_block="",
+        )
+    try:
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
+    except Exception as exc:
+        logger.warning("context judge call failed: %s", exc)
+        return None
+    parsed = _parse_scores(str(resp.content), required)
+    if parsed is None:
+        return None
+    return {
+        "context_precision": parsed["context_precision"],
+        "context_recall": parsed.get("context_recall"),
+    }
+
+
+def judge_response(
+    question: str,
+    context_texts: list[str],
+    answer: str,
+    llm: BaseChatModel,
+    config: dict | None = None,
+) -> dict | None:
+    """Score a *live* response on three label-free axes in one call (cheap enough
+    for the chat hot path): faithfulness, answer_relevance, context_precision.
+    Returns the parsed scores, or None if the call fails / can't be parsed."""
+    context = "\n\n".join(context_texts) or "No context retrieved."
+    prompt = _RESPONSE_PROMPT.format(question=_esc(question), context=_esc(context), answer=_esc(answer))
+    try:
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
+    except Exception as exc:
+        logger.warning("response judge call failed: %s", exc)
+        return None
+    return _parse_scores(str(resp.content), _RESPONSE_KEYS)
+
+
+def judge_correctness(
+    question: str,
+    answer: str,
+    reference_answer: str | None,
+    llm: BaseChatModel,
+    config: dict | None = None,
+) -> float | None:
+    """Grade answer correctness against a REFERENCE answer (RAGAs answer
+    correctness). Returns a float in [0, 1], or None when there is no reference
+    or the call fails / can't be parsed."""
+    if not (reference_answer and reference_answer.strip()):
+        return None
+    prompt = _CORRECTNESS_PROMPT.format(question=_esc(question), reference=_esc(reference_answer), answer=_esc(answer))
+    try:
+        resp = llm.invoke([HumanMessage(content=prompt)], config=config)
+    except Exception as exc:
+        logger.warning("correctness judge call failed: %s", exc)
+        return None
+    parsed = _parse_scores(str(resp.content), ("answer_correctness",))
+    return parsed["answer_correctness"] if parsed else None

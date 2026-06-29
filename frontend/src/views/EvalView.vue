@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useEvalStore, blankItem, type VariantResult, type Metrics } from '@/stores/evaluation'
+import { useEvalStore, blankItem, type VariantResult, type Metrics, type HistoryRun } from '@/stores/evaluation'
 import { useDocumentsStore } from '@/stores/documents'
+import GroupedBarChart from '@/components/charts/GroupedBarChart.vue'
+import TrendChart from '@/components/charts/TrendChart.vue'
 
 const evalStore = useEvalStore()
 const docStore  = useDocumentsStore()
+
+// Stable colour per config series across both charts.
+const PALETTE = ['#1abcfe', '#a259ff', '#0acf83', '#f59e0b', '#ef4444', '#0b7fb0', '#7c3aed', '#db2777']
+const colorFor = (i: number) => PALETTE[i % PALETTE.length]
 
 const k          = ref(5)
 const judge      = ref(false)
@@ -17,10 +23,13 @@ onMounted(async () => {
   await Promise.all([
     evalStore.fetchGold(),
     evalStore.fetchPresets(),
+    evalStore.fetchHistory(),
+    evalStore.fetchTracing(),
     docStore.documents.length ? Promise.resolve() : docStore.fetchDocuments(),
   ])
-  // Default selection: dense + hybrid α0.5 + hybrid + rerank.
-  evalStore.presets.forEach((p, i) => { selected[p.label] = i !== 2 })
+  // Default selection: the gate comparison pair + hybrid + rerank.
+  const on = new Set(['dense (no gate)', 'dense + gate', 'hybrid + rerank'])
+  evalStore.presets.forEach(p => { selected[p.label] = on.has(p.label) })
 })
 
 // ── Gold editor helpers ───────────────────────────────────────────────────────
@@ -77,8 +86,11 @@ const baseCols: Col[] = [
   { key: 'p50_latency_ms', label: 'p50 lat', suffix: ' ms', higher: false },
 ]
 const judgeCols: Col[] = [
-  { key: 'faithfulness',     label: 'Faithful', pct: true, higher: true },
-  { key: 'answer_relevance', label: 'Ans rel',  pct: true, higher: true },
+  { key: 'context_precision',  label: 'Ctx prec', pct: true, higher: true },
+  { key: 'context_recall',     label: 'Ctx rec',  pct: true, higher: true },
+  { key: 'faithfulness',       label: 'Faithful', pct: true, higher: true },
+  { key: 'answer_relevance',   label: 'Ans rel',  pct: true, higher: true },
+  { key: 'answer_correctness', label: 'Ans corr', pct: true, higher: true },
 ]
 const columns = computed<Col[]>(() =>
   evalStore.result?.judge_enabled ? [...baseCols, ...judgeCols] : baseCols,
@@ -101,6 +113,64 @@ function bestIdx(results: VariantResult[], col: Col): number {
   })
   return best
 }
+
+// ── Charts ──────────────────────────────────────────────────────────────────
+// All charted metrics live on [0, 1]; latency (ms) is excluded so one shared
+// y-axis is meaningful.
+const chartCols = computed<Col[]>(() => columns.value.filter(c => c.key !== 'p50_latency_ms'))
+
+const barSeries = computed(() =>
+  (evalStore.result?.results ?? []).map((r, i) => ({ label: r.label, color: colorFor(i) })),
+)
+const barGroups = computed(() =>
+  chartCols.value.map(c => ({
+    label: c.label,
+    values: (evalStore.result?.results ?? []).map(r => {
+      const v = r.metrics[c.key]
+      return v === null || v === undefined ? null : v
+    }),
+  })),
+)
+
+// Trend chart over run history.
+const trendOptions: { key: keyof Metrics; label: string }[] = [
+  { key: 'ndcg@k', label: 'nDCG@k' },
+  { key: 'hit@k', label: 'Hit@k' },
+  { key: 'recall@k', label: 'Recall@k' },
+  { key: 'mrr', label: 'MRR' },
+  { key: 'precision@k', label: 'Precision@k' },
+  { key: 'context_precision', label: 'Context precision' },
+  { key: 'context_recall', label: 'Context recall' },
+  { key: 'faithfulness', label: 'Faithfulness' },
+  { key: 'answer_relevance', label: 'Answer relevance' },
+  { key: 'answer_correctness', label: 'Answer correctness' },
+]
+const trendMetric = ref<keyof Metrics>('ndcg@k')
+
+function runTime(run: HistoryRun): string {
+  const d = new Date(run.created_at)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+const trendXLabels = computed(() => evalStore.history.map(runTime))
+
+/** Union of config labels seen across history, each a line in the trend chart. */
+const trendConfigLabels = computed(() => {
+  const set = new Set<string>()
+  evalStore.history.forEach(run => run.summary.forEach(s => set.add(s.label)))
+  return [...set]
+})
+const trendLines = computed(() =>
+  trendConfigLabels.value.map((label, i) => ({
+    label,
+    color: colorFor(i),
+    points: evalStore.history.map(run => {
+      const s = run.summary.find(x => x.label === label)
+      const v = s ? s.metrics[trendMetric.value] : null
+      return v === null || v === undefined ? null : v
+    }),
+  })),
+)
 </script>
 
 <template>
@@ -113,9 +183,22 @@ function bestIdx(results: VariantResult[], col: Col): number {
       <h1>RAG Evaluation</h1>
       <p>
         Measure retrieval quality with standard IR metrics (Hit@k, Recall@k, MRR, nDCG, Precision)
-        and — optionally — answer quality with an LLM-as-judge (the RAGAs faithfulness / answer-relevance
-        triad). Define a small gold set, pick which pipeline configurations to compare, and run.
+        and — optionally — answer quality with an LLM-as-judge: label-free context precision / recall
+        plus the RAGAs faithfulness / answer-relevance triad. Define a small gold set, pick which
+        pipeline configurations to compare (e.g. the relevance gate on vs. off), and run.
       </p>
+
+      <div class="trace-banner" :class="evalStore.tracing.enabled ? 'on' : 'off'">
+        <span class="trace-dot" />
+        <template v-if="evalStore.tracing.enabled">
+          Per-call tracing is <strong>live</strong> — every chat, answer, and judge call is sent to Langfuse
+          (<code>{{ evalStore.tracing.host }}</code>) with latency, token, and cost breakdowns.
+        </template>
+        <template v-else>
+          Per-call tracing is <strong>off</strong>. Set <code>LANGFUSE_PUBLIC_KEY</code> / <code>LANGFUSE_SECRET_KEY</code>
+          in the backend <code>.env</code> to trace every LLM call and chart quality in Langfuse.
+        </template>
+      </div>
     </div>
 
     <!-- ── Gold set ─────────────────────────────────────────────────────────── -->
@@ -241,6 +324,12 @@ function bestIdx(results: VariantResult[], col: Col): number {
         </table>
       </div>
 
+      <!-- Metric comparison chart (visual companion to the table) -->
+      <div v-if="barSeries.length" class="chart-card">
+        <h3 class="chart-title">Metric comparison</h3>
+        <GroupedBarChart :series="barSeries" :groups="barGroups" :max="1" :pct="false" />
+      </div>
+
       <!-- Per-question drill-down -->
       <template v-for="r in evalStore.result.results" :key="r.label + '-d'">
         <div v-if="expanded[r.label]" class="drill">
@@ -251,7 +340,11 @@ function bestIdx(results: VariantResult[], col: Col): number {
                 {{ q.hit ? `hit @${q.first_relevant_rank}` : 'miss' }}
               </span>
               <span class="qtext">{{ q.question }}</span>
-              <span class="qmeta">nDCG {{ q['ndcg@k'].toFixed(2) }} · {{ Math.round(q.latency_ms) }} ms</span>
+              <span class="qmeta">
+                nDCG {{ q['ndcg@k'].toFixed(2) }} · {{ Math.round(q.latency_ms) }} ms<template
+                  v-if="q.context_precision !== null"
+> · ctx-prec {{ (q.context_precision * 100).toFixed(0) }}%</template>
+              </span>
             </div>
 
             <div v-if="q.answer" class="answer">
@@ -274,6 +367,25 @@ function bestIdx(results: VariantResult[], col: Col): number {
         </div>
       </template>
     </section>
+
+    <!-- ── Trends over time ─────────────────────────────────────────────────── -->
+    <section v-if="evalStore.history.length >= 2" class="block">
+      <div class="block-head">
+        <h2>{{ evalStore.result ? '4' : '3' }} · Quality trends</h2>
+        <span class="muted">How each configuration's metrics move across the last {{ evalStore.history.length }} runs.</span>
+      </div>
+      <div class="chart-card">
+        <div class="trend-controls">
+          <label class="inline-field">
+            Metric
+            <select v-model="trendMetric" class="input select">
+              <option v-for="o in trendOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
+            </select>
+          </label>
+        </div>
+        <TrendChart :lines="trendLines" :x-labels="trendXLabels" :max="1" :pct="false" />
+      </div>
+    </section>
   </div>
 </template>
 
@@ -288,6 +400,25 @@ function bestIdx(results: VariantResult[], col: Col): number {
 .eyebrow-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 .page-header h1 { margin-bottom: 8px; }
 .page-header p { max-width: 70ch; }
+
+/* ── Tracing banner ──────────────────────────────────────────────────────── */
+.trace-banner {
+  display: flex; align-items: center; gap: 9px; margin-top: 16px;
+  padding: 9px 13px; border-radius: var(--radius-sm); font-size: .8rem;
+  border: 1px solid var(--border); max-width: 80ch; line-height: 1.5;
+}
+.trace-banner code { font-size: .76rem; background: var(--bg-alt); padding: 1px 5px; border-radius: 4px; }
+.trace-banner .trace-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.trace-banner.on { background: rgba(10,207,131,.08); border-color: rgba(10,207,131,.35); color: var(--text); }
+.trace-banner.on .trace-dot { background: #0acf83; box-shadow: 0 0 0 3px rgba(10,207,131,.18); }
+.trace-banner.off { background: var(--bg-alt); color: var(--text-muted); }
+.trace-banner.off .trace-dot { background: var(--text-muted); }
+
+/* ── Chart cards ─────────────────────────────────────────────────────────── */
+.chart-card { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.chart-title { font-size: .9rem; margin-bottom: 10px; }
+.trend-controls { display: flex; gap: 16px; margin-bottom: 12px; }
+.select { padding: 5px 8px; }
 
 .block { margin-bottom: 34px; }
 .block-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }

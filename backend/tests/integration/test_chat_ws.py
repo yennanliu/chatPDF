@@ -92,6 +92,28 @@ def test_ws_messages_persisted_after_turn(ws_client, sample_pdf):
     assert "assistant" in roles
 
 
+def test_ws_emits_metrics_frame_after_done(ws_client, sample_pdf):
+    # After streaming + the done frame, a non-blocking metrics frame carries the
+    # per-response quality scores (confidence + label-free judge axes).
+    sid = _setup(ws_client, sample_pdf)
+
+    with ws_client.websocket_connect(f"/ws/chat/{sid}") as ws:
+        ws.send_json({"query": "What is this document about?"})
+        frames = []
+        for _ in range(40):
+            msg = ws.receive_json()
+            frames.append(msg)
+            if msg.get("type") == "metrics":
+                break
+
+    types = [f["type"] for f in frames]
+    assert "done" in types
+    assert types.index("metrics") > types.index("done")   # metrics arrives after done
+    data = next(f for f in frames if f["type"] == "metrics")["data"]
+    for key in ("confidence", "faithfulness", "answer_relevance", "context_precision", "retrieval_confidence"):
+        assert key in data
+
+
 def test_ws_unknown_session_sends_error(ws_client):
     with ws_client.websocket_connect("/ws/chat/no-such-session") as ws:
         ws.send_json({"query": "hello"})

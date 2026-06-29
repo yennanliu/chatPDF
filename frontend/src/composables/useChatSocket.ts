@@ -10,11 +10,20 @@ export interface Source {
   score: number
 }
 
+export interface ResponseMetrics {
+  confidence: number | null
+  retrieval_confidence: number | null
+  context_precision: number | null
+  faithfulness: number | null
+  answer_relevance: number | null
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   sources: Source[] | null
+  metrics: ResponseMetrics | null
   isStreaming: boolean
 }
 
@@ -50,8 +59,8 @@ export function useChatSocket(sessionId: Ref<string | null>) {
 
     ws.onmessage = (evt: MessageEvent<string>) => {
       const frame = JSON.parse(evt.data) as {
-        type: 'token' | 'done' | 'error'
-        data?: string
+        type: 'token' | 'done' | 'error' | 'metrics'
+        data?: string | ResponseMetrics
         sources?: Source[]
         detail?: string
       }
@@ -59,7 +68,7 @@ export function useChatSocket(sessionId: Ref<string | null>) {
       if (frame.type === 'token') {
         const last = messages.value[messages.value.length - 1]
         if (last?.role === 'assistant' && last.isStreaming) {
-          last.content += frame.data ?? ''
+          last.content += (frame.data as string) ?? ''
         }
       } else if (frame.type === 'done') {
         const last = messages.value[messages.value.length - 1]
@@ -68,6 +77,12 @@ export function useChatSocket(sessionId: Ref<string | null>) {
           last.sources = frame.sources ?? null
         }
         isStreaming.value = false
+      } else if (frame.type === 'metrics') {
+        // Non-blocking quality scores, arriving just after `done`.
+        const last = messages.value[messages.value.length - 1]
+        if (last?.role === 'assistant') {
+          last.metrics = (frame.data as ResponseMetrics) ?? null
+        }
       } else if (frame.type === 'error') {
         const last = messages.value[messages.value.length - 1]
         if (last?.role === 'assistant' && last.isStreaming) {
@@ -107,8 +122,8 @@ export function useChatSocket(sessionId: Ref<string | null>) {
 
   function _dispatch(query: string) {
     const uid = crypto.randomUUID()
-    messages.value.push({ id: `${uid}_u`, role: 'user',      content: query, sources: null, isStreaming: false })
-    messages.value.push({ id: `${uid}_a`, role: 'assistant', content: '',    sources: null, isStreaming: true  })
+    messages.value.push({ id: `${uid}_u`, role: 'user',      content: query, sources: null, metrics: null, isStreaming: false })
+    messages.value.push({ id: `${uid}_a`, role: 'assistant', content: '',    sources: null, metrics: null, isStreaming: true  })
     isStreaming.value = true
     wsError.value = null
     ws!.send(JSON.stringify({ query }))
@@ -129,12 +144,15 @@ export function useChatSocket(sessionId: Ref<string | null>) {
     }
   }
 
-  function loadHistory(history: Array<{ role: string; content: string; sources: Source[] | null }>) {
+  function loadHistory(
+    history: Array<{ role: string; content: string; sources: Source[] | null; metrics?: ResponseMetrics | null }>,
+  ) {
     messages.value = history.map((m, i) => ({
       id: `hist_${i}`,
       role: m.role as 'user' | 'assistant',
       content: m.content,
       sources: m.sources ?? null,
+      metrics: m.metrics ?? null,
       isStreaming: false,
     }))
   }
