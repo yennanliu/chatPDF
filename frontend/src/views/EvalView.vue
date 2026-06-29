@@ -27,8 +27,9 @@ onMounted(async () => {
     evalStore.fetchTracing(),
     docStore.documents.length ? Promise.resolve() : docStore.fetchDocuments(),
   ])
-  // Default selection: dense + hybrid α0.5 + hybrid + rerank.
-  evalStore.presets.forEach((p, i) => { selected[p.label] = i !== 2 })
+  // Default selection: the gate comparison pair + hybrid + rerank.
+  const on = new Set(['dense (no gate)', 'dense + gate', 'hybrid + rerank'])
+  evalStore.presets.forEach(p => { selected[p.label] = on.has(p.label) })
 })
 
 // ── Gold editor helpers ───────────────────────────────────────────────────────
@@ -85,8 +86,10 @@ const baseCols: Col[] = [
   { key: 'p50_latency_ms', label: 'p50 lat', suffix: ' ms', higher: false },
 ]
 const judgeCols: Col[] = [
-  { key: 'faithfulness',     label: 'Faithful', pct: true, higher: true },
-  { key: 'answer_relevance', label: 'Ans rel',  pct: true, higher: true },
+  { key: 'context_precision', label: 'Ctx prec', pct: true, higher: true },
+  { key: 'context_recall',    label: 'Ctx rec',  pct: true, higher: true },
+  { key: 'faithfulness',      label: 'Faithful', pct: true, higher: true },
+  { key: 'answer_relevance',  label: 'Ans rel',  pct: true, higher: true },
 ]
 const columns = computed<Col[]>(() =>
   evalStore.result?.judge_enabled ? [...baseCols, ...judgeCols] : baseCols,
@@ -135,6 +138,8 @@ const trendOptions: { key: keyof Metrics; label: string }[] = [
   { key: 'recall@k', label: 'Recall@k' },
   { key: 'mrr', label: 'MRR' },
   { key: 'precision@k', label: 'Precision@k' },
+  { key: 'context_precision', label: 'Context precision' },
+  { key: 'context_recall', label: 'Context recall' },
   { key: 'faithfulness', label: 'Faithfulness' },
   { key: 'answer_relevance', label: 'Answer relevance' },
 ]
@@ -176,8 +181,9 @@ const trendLines = computed(() =>
       <h1>RAG Evaluation</h1>
       <p>
         Measure retrieval quality with standard IR metrics (Hit@k, Recall@k, MRR, nDCG, Precision)
-        and — optionally — answer quality with an LLM-as-judge (the RAGAs faithfulness / answer-relevance
-        triad). Define a small gold set, pick which pipeline configurations to compare, and run.
+        and — optionally — answer quality with an LLM-as-judge: label-free context precision / recall
+        plus the RAGAs faithfulness / answer-relevance triad. Define a small gold set, pick which
+        pipeline configurations to compare (e.g. the relevance gate on vs. off), and run.
       </p>
 
       <div class="trace-banner" :class="evalStore.tracing.enabled ? 'on' : 'off'">
@@ -332,7 +338,11 @@ const trendLines = computed(() =>
                 {{ q.hit ? `hit @${q.first_relevant_rank}` : 'miss' }}
               </span>
               <span class="qtext">{{ q.question }}</span>
-              <span class="qmeta">nDCG {{ q['ndcg@k'].toFixed(2) }} · {{ Math.round(q.latency_ms) }} ms</span>
+              <span class="qmeta">
+                nDCG {{ q['ndcg@k'].toFixed(2) }} · {{ Math.round(q.latency_ms) }} ms<template
+                  v-if="q.context_precision !== null"
+> · ctx-prec {{ (q.context_precision * 100).toFixed(0) }}%</template>
+              </span>
             </div>
 
             <div v-if="q.answer" class="answer">

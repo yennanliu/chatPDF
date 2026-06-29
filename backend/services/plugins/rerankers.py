@@ -25,11 +25,22 @@ class CrossEncoderReranker(BaseReranker):
         except Exception:
             pass
 
-    def rerank(self, query: str, chunks: list[dict]) -> list[dict]:
+    def score(self, query: str, chunks: list[dict]) -> list[float]:
+        """Cross-encoder relevance logit for each (query, chunk) pair, in order.
+
+        Higher = more relevant; ≈0.0 is the relevant/not-relevant boundary
+        (sigmoid 0.5). Used by both reranking and the relevance gate.
+        """
+        if not chunks:
+            return []
         from sentence_transformers import CrossEncoder
         if self._model is None:
             self._model = CrossEncoder(self._model_name)
         pairs = [(query, c["text"]) for c in chunks]
-        scores = self._model.predict(pairs)
-        ranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
+        return [float(s) for s in self._model.predict(pairs)]
+
+    def rerank(self, query: str, chunks: list[dict]) -> list[dict]:
+        if not chunks:
+            return chunks
+        ranked = sorted(zip(chunks, self.score(query, chunks)), key=lambda x: x[1], reverse=True)
         return [c for c, _ in ranked]

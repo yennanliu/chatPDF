@@ -100,15 +100,24 @@ def _eval_variant(
                 "answer": None,
                 "faithfulness": None,
                 "answer_relevance": None,
+                "context_precision": None,
+                "context_recall": None,
             }
 
             if judge_on:
                 try:
+                    ctx_texts = [c["text"] for c in context]
+                    # Retrieval quality, label-free — independent of the generated answer.
+                    ctx_verdict = judge_mod.judge_context(
+                        question, ctx_texts, item.get("reference_answer"), judge_llm, scope.config
+                    )
+                    if ctx_verdict:
+                        row["context_precision"] = ctx_verdict["context_precision"]
+                        row["context_recall"] = ctx_verdict["context_recall"]
+
                     answer = _generate_answer(question, context, cfg, answer_llm, scope.config)
                     row["answer"] = answer
-                    verdict = judge_mod.judge_answer(
-                        question, [c["text"] for c in context], answer, judge_llm, scope.config
-                    )
+                    verdict = judge_mod.judge_answer(question, ctx_texts, answer, judge_llm, scope.config)
                     if verdict:
                         row["faithfulness"] = verdict["faithfulness"]
                         row["answer_relevance"] = verdict["answer_relevance"]
@@ -117,8 +126,9 @@ def _eval_variant(
 
             rows.append(row)
 
-        faith = [r["faithfulness"] for r in rows if r["faithfulness"] is not None]
-        rel = [r["answer_relevance"] for r in rows if r["answer_relevance"] is not None]
+        def _opt_mean(key: str) -> float | None:
+            vals = [r[key] for r in rows if r[key] is not None]
+            return _mean(vals) if vals else None
 
         metrics = {
             "hit@k": _mean([1.0 if r["hit"] else 0.0 for r in rows]),
@@ -127,8 +137,10 @@ def _eval_variant(
             "ndcg@k": _mean([r["ndcg@k"] for r in rows]),
             "precision@k": _mean([r["precision@k"] for r in rows]),
             "p50_latency_ms": round(median(latencies), 1) if latencies else 0.0,
-            "faithfulness": _mean(faith) if faith else None,
-            "answer_relevance": _mean(rel) if rel else None,
+            "context_precision": _opt_mean("context_precision"),
+            "context_recall": _opt_mean("context_recall"),
+            "faithfulness": _opt_mean("faithfulness"),
+            "answer_relevance": _opt_mean("answer_relevance"),
         }
         scope.score(metrics)
 

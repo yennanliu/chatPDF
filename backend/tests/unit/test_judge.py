@@ -5,7 +5,8 @@ must be robust to the usual LLM output noise (code fences, stray prose).
 """
 from __future__ import annotations
 
-from services.judge import parse_judge_response
+from services.judge import judge_context, parse_judge_response
+from tests.conftest import _FakeChatModel
 
 
 def test_parses_plain_json():
@@ -33,3 +34,26 @@ def test_returns_none_on_garbage():
 
 def test_returns_none_when_keys_missing():
     assert parse_judge_response('{"faithfulness": 0.9}') is None
+
+
+# ── context precision / recall (label-free retrieval metrics) ──────────────────
+
+def test_judge_context_scores_precision_and_recall_with_reference():
+    llm = _FakeChatModel(response='{"context_precision": 0.75, "context_recall": 0.9}')
+    out = judge_context("q?", ["chunk a", "chunk b"], "the reference answer", llm)
+    assert out == {"context_precision": 0.75, "context_recall": 0.9}
+
+
+def test_judge_context_recall_is_none_without_reference():
+    # Precision is still scorable from the question alone; recall needs a reference.
+    llm = _FakeChatModel(response='{"context_precision": 0.6}')
+    out = judge_context("q?", ["chunk a"], None, llm)
+    assert out["context_precision"] == 0.6
+    assert out["context_recall"] is None
+
+
+def test_judge_context_clamps_and_handles_garbage():
+    assert judge_context("q?", ["c"], "ref", _FakeChatModel(response="no json here")) is None
+    clamped = judge_context("q?", ["c"], "ref",
+                            _FakeChatModel(response='{"context_precision": 1.3, "context_recall": -1}'))
+    assert clamped == {"context_precision": 1.0, "context_recall": 0.0}

@@ -41,7 +41,8 @@ async def test_reranker_applied_when_configured():
         {"text": "reranked chunk", "metadata": {"file": "doc.pdf"}, "score": 0.95}
     ]
 
-    cfg = RAGConfig(reranker="cross_encoder", rerank_top_n=1)
+    # Disable the relevance gate to isolate the reranker wiring under test.
+    cfg = RAGConfig(reranker="cross_encoder", rerank_top_n=1, relevance_gate=None)
 
     with patch("services.rag.build_reranker", return_value=fake_reranker):
         results = await _collect(

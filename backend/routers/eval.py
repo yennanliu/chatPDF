@@ -33,7 +33,10 @@ logger = logging.getLogger("chatpdf.eval")
 
 # Curated config variants mirroring the comparison table in doc/rag_evaluation.md §5.
 _PRESETS = [
-    {"label": "dense / k5", "overrides": {"retriever": "dense", "top_k": 5}},
+    # First pair isolates the relevance gate's effect (everything else equal) —
+    # compare context_precision between them to see the noise the gate removes.
+    {"label": "dense (no gate)", "overrides": {"retriever": "dense", "top_k": 5, "relevance_gate": None}},
+    {"label": "dense + gate", "overrides": {"retriever": "dense", "top_k": 5}},  # gate on (default)
     {"label": "hybrid α0.5", "overrides": {"retriever": "hybrid", "hybrid_alpha": 0.5, "top_k": 5}},
     {"label": "hybrid α0.3", "overrides": {"retriever": "hybrid", "hybrid_alpha": 0.3, "top_k": 5}},
     {

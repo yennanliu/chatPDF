@@ -40,6 +40,8 @@ export interface QuestionResult {
   answer: string | null
   faithfulness: number | null
   answer_relevance: number | null
+  context_precision: number | null
+  context_recall: number | null
 }
 
 export interface Metrics {
@@ -49,6 +51,8 @@ export interface Metrics {
   'ndcg@k': number
   'precision@k': number
   p50_latency_ms: number
+  context_precision: number | null
+  context_recall: number | null
   faithfulness: number | null
   answer_relevance: number | null
 }

@@ -73,13 +73,13 @@ Always commit `pyproject.toml` **and** `uv.lock`. Never commit `.env`.
 | `backend/vector_store.py` | ChromaDB wrapper — injectable for tests |
 | `backend/models/tables.py` | SQLModel ORM tables |
 | `backend/services/rag_config.py` | `RAGConfig` dataclass + plugin registries |
-| `backend/services/rag.py` | LangGraph pipeline (`retrieve → generate`) |
+| `backend/services/rag.py` | RAG pipeline (`retrieve → grade → relevance-gate → rerank → generate`); cross-encoder relevance gate on by default |
 | `backend/services/llm_gateway.py` | Multi-LLM abstraction (OpenAI / Gemini / Claude) |
 | `backend/services/ingestion.py` | PDF → chunks → ChromaDB |
 | `backend/services/chat_history.py` | SQLite message read/write |
 | `backend/services/eval.py` | Pure retrieval metrics (Hit@k, Recall@k, MRR, nDCG@k, Precision@k) + substring scorer |
 | `backend/services/eval_runner.py` | Live eval runner — drives the RAG path over a gold set per config variant |
-| `backend/services/judge.py` | LLM-as-judge (faithfulness / answer-relevance) for generation quality |
+| `backend/services/judge.py` | LLM-as-judge: faithfulness / answer-relevance + label-free context precision / recall |
 | `backend/services/eval_history.py` | Persists per-run aggregate metrics (`eval_run` table) for trend charts |
 | `backend/services/tracing.py` | Optional Langfuse tracing — no-op when unconfigured; traces every LLM call + pushes eval scores |
 | `backend/services/plugins/` | Chunker / Embedder / Retriever / Reranker plugins |

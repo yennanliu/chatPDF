@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import AsyncIterator, Union
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -8,6 +9,47 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from services.rag_config import RAGConfig, build_reranker, build_retriever
 from services.tokens import count_tokens
 from vector_store import VectorStore
+
+logger = logging.getLogger("chatpdf.rag")
+
+_relevance_scorer_singleton = None
+
+
+def _relevance_scorer():
+    """Shared cross-encoder used by the relevance gate (lazy, process-wide).
+
+    Indirected through a factory so tests can stub it without loading the model.
+    """
+    global _relevance_scorer_singleton
+    if _relevance_scorer_singleton is None:
+        from services.plugins.rerankers import CrossEncoderReranker
+        _relevance_scorer_singleton = CrossEncoderReranker()
+    return _relevance_scorer_singleton
+
+
+def apply_relevance_gate(query: str, chunks: list[dict], threshold: float, scorer) -> list[dict]:
+    """Cross-encoder relevance gate: score each (query, chunk), drop those below
+    ``threshold`` (raw CE logit; 0.0 ≈ sigmoid 0.5), and sort by relevance desc.
+
+    Improves grounding by removing chunks the cross-encoder judges irrelevant
+    before they reach the prompt. Never empties the context — the single
+    best-scoring chunk is always kept, so a borderline retrieval still yields
+    grounding rather than an empty prompt. A scoring failure passes chunks
+    through unchanged (the gate must never break a chat turn)."""
+    if not chunks:
+        return chunks
+    try:
+        scores = scorer.score(query, chunks)
+    except Exception:
+        logger.warning("relevance gate scoring failed; passing chunks through", exc_info=True)
+        return chunks
+    scored = sorted(
+        ({**c, "relevance": float(s)} for c, s in zip(chunks, scores)),
+        key=lambda c: c["relevance"],
+        reverse=True,
+    )
+    kept = [c for c in scored if c["relevance"] >= threshold]
+    return kept or scored[:1]
 
 _SYSTEM = (
     "You are a helpful assistant. Answer questions based solely on the provided "
@@ -122,11 +164,15 @@ def retrieve_context(
     else:
         context = retriever.search(query, rag_config.top_k, doc_ids)
 
-    # 2. Grade filter — drop weakly-relevant chunks before they reach the prompt
+    # 2. Grade filter — drop weakly-relevant chunks by raw retriever score
     if rag_config.min_score > 0:
         context = [c for c in context if c.get("score", 0.0) >= rag_config.min_score]
 
-    # 3. Rerank if configured
+    # 3. Relevance gate — cross-encoder drops chunks it judges irrelevant (grounding)
+    if rag_config.relevance_gate is not None and context:
+        context = apply_relevance_gate(query, context, rag_config.relevance_gate, _relevance_scorer())
+
+    # 4. Rerank if configured
     if rag_config.reranker != "none" and context:
         context = build_reranker(rag_config).rerank(query, context)[: rag_config.rerank_top_n]
 

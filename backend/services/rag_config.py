@@ -21,8 +21,15 @@ class RAGConfig:
     top_k: int = 5
     retriever: str = "dense"         # dense | hybrid
     hybrid_alpha: float = 0.5
-    min_score: float = 0.0           # drop retrieved chunks below this score (0 = off)
+    min_score: float = 0.0           # drop retrieved chunks below this raw retriever score (0 = off)
     multi_query: int = 0             # generate N query paraphrases for recall (0 = off)
+
+    # relevance gate (grounding) — a cross-encoder re-scores each retrieved chunk
+    # for query relevance and drops those below this logit threshold (0.0 ≈ the
+    # "more relevant than not" boundary / sigmoid 0.5). On by default to cut noisy
+    # context before generation. Set to null to disable. Never empties the context
+    # (the single best chunk is always kept).
+    relevance_gate: float | None = 0.0
 
     # reranking
     reranker: str = "none"           # none | cross_encoder
